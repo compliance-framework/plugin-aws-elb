@@ -27,6 +27,7 @@ The CCF agent passes configuration as flat string fields. Structured values are 
 | `policy_labels` | `{}` | JSON string map merged into generated evidence labels. |
 | `max_concurrency` | `4` | Positive integer worker count for account/region collection. |
 | `api_timeout_seconds` | `60` | Positive integer timeout per account/region target. |
+| `tag_batch_size` | `20` | Positive integer no greater than `20`, used as the ELBv2 `DescribeTags` resource ARN batch size. |
 
 Example:
 

@@ -305,44 +305,46 @@ func (c *Collector) collectELBV2(ctx context.Context, client ELBV2API) targetCol
 	loadBalancers, lbErrors := c.collectLoadBalancers(ctx, client)
 	result.loadBalancers = loadBalancers
 	result.errors["target"] = append(result.errors["target"], lbErrors...)
+	lbARNs := make([]string, 0, len(loadBalancers))
 	for _, lb := range loadBalancers {
 		lbARN := aws.ToString(lb.LoadBalancerArn)
 		result.errors[lbARN] = append(result.errors[lbARN], lbErrors...)
-		tags, tagErr := c.collectTags(ctx, client, lbARN)
-		if tagErr != nil {
-			result.errors[lbARN] = append(result.errors[lbARN], CollectionError{Scope: "tags", Message: tagErr.Error()})
-		}
-		result.tags[lbARN] = tags
+		lbARNs = append(lbARNs, lbARN)
 		listeners, listenerErrors := c.collectListeners(ctx, client, lbARN)
 		result.listeners[lbARN] = listeners
 		result.errors[lbARN] = append(result.errors[lbARN], listenerErrors...)
 		for _, listener := range listeners {
 			listenerARN := aws.ToString(listener.ListenerArn)
 			result.errors[listenerARN] = append(result.errors[listenerARN], listenerErrors...)
-			listenerTags, tagErr := c.collectTags(ctx, client, listenerARN)
-			if tagErr != nil {
-				result.errors[listenerARN] = append(result.errors[listenerARN], CollectionError{Scope: "tags", Message: tagErr.Error()})
-			}
-			result.tags[listenerARN] = listenerTags
 		}
 	}
+	c.mergeTags(ctx, client, result, lbARNs)
+	c.mergeTags(ctx, client, result, listenerARNs(result.listeners))
 
 	targetGroups, tgErrors := c.collectTargetGroups(ctx, client)
 	result.targetGroups = targetGroups
 	result.errors["target"] = append(result.errors["target"], tgErrors...)
+	tgARNs := make([]string, 0, len(targetGroups))
 	for _, targetGroup := range targetGroups {
 		tgARN := aws.ToString(targetGroup.TargetGroupArn)
 		result.errors[tgARN] = append(result.errors[tgARN], tgErrors...)
-		tgTags, tagErr := c.collectTags(ctx, client, tgARN)
-		if tagErr != nil {
-			result.errors[tgARN] = append(result.errors[tgARN], CollectionError{Scope: "tags", Message: tagErr.Error()})
-		}
-		result.tags[tgARN] = tgTags
+		tgARNs = append(tgARNs, tgARN)
 		health, healthErrors := c.collectTargetHealth(ctx, client, tgARN)
 		result.targetHealth[tgARN] = health
 		result.errors[tgARN] = append(result.errors[tgARN], healthErrors...)
 	}
+	c.mergeTags(ctx, client, result, tgARNs)
 	return result
+}
+
+func (c *Collector) mergeTags(ctx context.Context, client ELBV2API, result targetCollection, arns []string) {
+	tags, tagErrors := c.collectTagsBatch(ctx, client, arns)
+	for arn, arnTags := range tags {
+		result.tags[arn] = arnTags
+	}
+	for arn, errs := range tagErrors {
+		result.errors[arn] = append(result.errors[arn], errs...)
+	}
 }
 
 func (c *Collector) collectLoadBalancers(ctx context.Context, client ELBV2API) ([]elbv2types.LoadBalancer, []CollectionError) {
@@ -410,21 +412,61 @@ func (c *Collector) collectTargetHealth(ctx context.Context, client ELBV2API, ta
 	return out.TargetHealthDescriptions, nil
 }
 
-func (c *Collector) collectTags(ctx context.Context, client ELBV2API, arn string) (map[string]string, error) {
-	if arn == "" {
-		return map[string]string{}, nil
+func (c *Collector) collectTagsBatch(ctx context.Context, client ELBV2API, arns []string) (map[string]map[string]string, map[string][]CollectionError) {
+	tags := map[string]map[string]string{}
+	errs := map[string][]CollectionError{}
+	filtered := make([]string, 0, len(arns))
+	for _, arn := range arns {
+		if arn == "" {
+			continue
+		}
+		if _, ok := tags[arn]; ok {
+			continue
+		}
+		tags[arn] = map[string]string{}
+		filtered = append(filtered, arn)
 	}
-	out, err := client.DescribeTags(ctx, &elbv2.DescribeTagsInput{ResourceArns: []string{arn}})
-	if err != nil {
-		return map[string]string{}, fmt.Errorf("describe_tags %q: %w", arn, err)
+
+	chunkSize := defaultTagBatchSize
+	if c.Config != nil && c.Config.TagBatchSize > 0 {
+		chunkSize = c.Config.TagBatchSize
 	}
-	tags := map[string]string{}
-	for _, description := range out.TagDescriptions {
-		for _, tag := range description.Tags {
-			tags[aws.ToString(tag.Key)] = aws.ToString(tag.Value)
+	for start := 0; start < len(filtered); start += chunkSize {
+		end := start + chunkSize
+		if end > len(filtered) {
+			end = len(filtered)
+		}
+		chunk := filtered[start:end]
+		out, err := client.DescribeTags(ctx, &elbv2.DescribeTagsInput{ResourceArns: chunk})
+		if err != nil {
+			for _, arn := range chunk {
+				errs[arn] = append(errs[arn], CollectionError{Scope: "tags", Message: fmt.Sprintf("describe_tags %q: %v", arn, err)})
+			}
+			continue
+		}
+		for _, description := range out.TagDescriptions {
+			arn := aws.ToString(description.ResourceArn)
+			if arn == "" {
+				continue
+			}
+			arnTags := map[string]string{}
+			for _, tag := range description.Tags {
+				arnTags[aws.ToString(tag.Key)] = aws.ToString(tag.Value)
+			}
+			tags[arn] = arnTags
 		}
 	}
-	return tags, nil
+	return tags, errs
+}
+
+func listenerARNs(listenersByLB map[string][]elbv2types.Listener) []string {
+	var arns []string
+	for _, listeners := range listenersByLB {
+		for _, listener := range listeners {
+			arns = append(arns, aws.ToString(listener.ListenerArn))
+		}
+	}
+	return arns
 }
 
 func (c *Collector) collectCloudTrailEvents(ctx context.Context, client CloudTrailAPI, start time.Time, end time.Time) ([]CloudTrailEvent, error) {

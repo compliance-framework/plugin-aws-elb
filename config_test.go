@@ -16,6 +16,9 @@ func TestParsePluginConfigDefaults(t *testing.T) {
 	if cfg.APITimeoutSeconds != 60 {
 		t.Fatalf("APITimeoutSeconds = %d, want 60", cfg.APITimeoutSeconds)
 	}
+	if cfg.TagBatchSize != 20 {
+		t.Fatalf("TagBatchSize = %d, want 20", cfg.TagBatchSize)
+	}
 	if len(cfg.Accounts) != 0 || len(cfg.DefaultRegions) != 0 {
 		t.Fatalf("unexpected default targets: %#v %#v", cfg.Accounts, cfg.DefaultRegions)
 	}
@@ -30,6 +33,7 @@ func TestParsePluginConfigStructuredValues(t *testing.T) {
 		"policy_labels":       `{"team":"security"}`,
 		"max_concurrency":     "8",
 		"api_timeout_seconds": "15",
+		"tag_batch_size":      "10",
 	})
 	if err != nil {
 		t.Fatalf("parse config: %v", err)
@@ -40,7 +44,7 @@ func TestParsePluginConfigStructuredValues(t *testing.T) {
 	if got := cfg.DefaultRegions; len(got) != 1 || got[0] != "us-east-1" {
 		t.Fatalf("default regions = %#v, want us-east-1", got)
 	}
-	if cfg.LookbackDays != 30 || cfg.MaxConcurrency != 8 || cfg.APITimeoutSeconds != 15 {
+	if cfg.LookbackDays != 30 || cfg.MaxConcurrency != 8 || cfg.APITimeoutSeconds != 15 || cfg.TagBatchSize != 10 {
 		t.Fatalf("numeric values not parsed: %#v", cfg)
 	}
 	if cfg.PolicyInputs["minimum_availability_zones"].(float64) != 2 {
@@ -68,6 +72,8 @@ func TestParsePluginConfigValidation(t *testing.T) {
 		{"lookback_days": "abc"},
 		{"max_concurrency": "0"},
 		{"api_timeout_seconds": "-1"},
+		{"tag_batch_size": "0"},
+		{"tag_batch_size": "21"},
 		{"accounts": `{"not":"array"}`},
 		{"policy_inputs": `[]`},
 		{"policy_labels": `[]`},

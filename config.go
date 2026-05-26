@@ -13,6 +13,7 @@ const (
 	defaultLookbackDays      = 90
 	defaultAPITimeoutSeconds = 60
 	defaultMaxConcurrency    = 4
+	defaultTagBatchSize      = 20
 	configKeyAccounts        = "accounts"
 	configKeyDefaultRegions  = "default_regions"
 	configKeyLookbackDays    = "lookback_days"
@@ -21,6 +22,7 @@ const (
 	configKeyPolicyLabels    = "policy_labels"
 	configKeyMaxConcurrency  = "max_concurrency"
 	configKeyAPITimeout      = "api_timeout_seconds"
+	configKeyTagBatchSize    = "tag_batch_size"
 )
 
 type PluginConfig struct {
@@ -31,6 +33,7 @@ type PluginConfig struct {
 	PolicyLabels      map[string]string
 	MaxConcurrency    int
 	APITimeoutSeconds int
+	TagBatchSize      int
 }
 
 type AccountConfig struct {
@@ -49,6 +52,7 @@ func parsePluginConfig(raw map[string]string) (*PluginConfig, error) {
 		PolicyLabels:      map[string]string{},
 		MaxConcurrency:    defaultMaxConcurrency,
 		APITimeoutSeconds: defaultAPITimeoutSeconds,
+		TagBatchSize:      defaultTagBatchSize,
 	}
 
 	if v := strings.TrimSpace(raw[configKeyAccounts]); v != "" {
@@ -104,6 +108,14 @@ func parsePluginConfig(raw map[string]string) (*PluginConfig, error) {
 			return nil, errors.New("api_timeout_seconds must be a positive integer")
 		}
 		cfg.APITimeoutSeconds = i
+	}
+
+	if v := strings.TrimSpace(raw[configKeyTagBatchSize]); v != "" {
+		i, err := strconv.Atoi(v)
+		if err != nil || i <= 0 || i > defaultTagBatchSize {
+			return nil, fmt.Errorf("tag_batch_size must be a positive integer no greater than %d", defaultTagBatchSize)
+		}
+		cfg.TagBatchSize = i
 	}
 
 	for i := range cfg.Accounts {

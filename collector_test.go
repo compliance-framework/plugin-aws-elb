@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ type fakeELBV2 struct {
 	loadBalancerMarkers []string
 	listenerMarkers     []string
 	targetGroupMarkers  []string
+	tagRequestSizes     []int
 }
 
 func (f *fakeELBV2) DescribeLoadBalancers(ctx context.Context, in *elbv2.DescribeLoadBalancersInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeLoadBalancersOutput, error) {
@@ -119,19 +121,88 @@ func (f *fakeELBV2) DescribeTargetHealth(ctx context.Context, in *elbv2.Describe
 }
 
 func (f *fakeELBV2) DescribeTags(ctx context.Context, in *elbv2.DescribeTagsInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeTagsOutput, error) {
-	if f.tagErr != nil && len(in.ResourceArns) > 0 && in.ResourceArns[0] == "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/net-lb/def" {
-		return nil, f.tagErr
+	f.tagRequestSizes = append(f.tagRequestSizes, len(in.ResourceArns))
+	for _, arn := range in.ResourceArns {
+		if f.tagErr != nil && arn == "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/net-lb/def" {
+			return nil, f.tagErr
+		}
 	}
-	return &elbv2.DescribeTagsOutput{
-		TagDescriptions: []elbv2types.TagDescription{
-			{
-				ResourceArn: aws.String(in.ResourceArns[0]),
-				Tags: []elbv2types.Tag{
-					{Key: aws.String("owner"), Value: aws.String("platform-team")},
-				},
+	out := &elbv2.DescribeTagsOutput{}
+	for _, arn := range in.ResourceArns {
+		out.TagDescriptions = append(out.TagDescriptions, elbv2types.TagDescription{
+			ResourceArn: aws.String(arn),
+			Tags: []elbv2types.Tag{
+				{Key: aws.String("owner"), Value: aws.String("platform-team")},
 			},
+		})
+	}
+	return out, nil
+}
+
+type fakeELBV2ManyTags struct {
+	resourceARNs []string
+	tagRequests  [][]string
+}
+
+func (f *fakeELBV2ManyTags) DescribeLoadBalancers(ctx context.Context, in *elbv2.DescribeLoadBalancersInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeLoadBalancersOutput, error) {
+	loadBalancers := make([]elbv2types.LoadBalancer, 0, len(f.resourceARNs))
+	for i, arn := range f.resourceARNs {
+		loadBalancers = append(loadBalancers, testLoadBalancer(arn, fmt.Sprintf("app-lb-%d", i)))
+	}
+	return &elbv2.DescribeLoadBalancersOutput{LoadBalancers: loadBalancers}, nil
+}
+
+func (f *fakeELBV2ManyTags) DescribeListeners(ctx context.Context, in *elbv2.DescribeListenersInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeListenersOutput, error) {
+	return &elbv2.DescribeListenersOutput{}, nil
+}
+
+func (f *fakeELBV2ManyTags) DescribeTargetGroups(ctx context.Context, in *elbv2.DescribeTargetGroupsInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeTargetGroupsOutput, error) {
+	return &elbv2.DescribeTargetGroupsOutput{}, nil
+}
+
+func (f *fakeELBV2ManyTags) DescribeTargetHealth(ctx context.Context, in *elbv2.DescribeTargetHealthInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeTargetHealthOutput, error) {
+	return &elbv2.DescribeTargetHealthOutput{}, nil
+}
+
+func (f *fakeELBV2ManyTags) DescribeTags(ctx context.Context, in *elbv2.DescribeTagsInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeTagsOutput, error) {
+	f.tagRequests = append(f.tagRequests, append([]string(nil), in.ResourceArns...))
+	out := &elbv2.DescribeTagsOutput{}
+	for _, arn := range in.ResourceArns {
+		out.TagDescriptions = append(out.TagDescriptions, elbv2types.TagDescription{
+			ResourceArn: aws.String(arn),
+			Tags: []elbv2types.Tag{
+				{Key: aws.String("owner"), Value: aws.String("platform-team")},
+			},
+		})
+	}
+	return out, nil
+}
+
+type fakeELBV2TagFailure struct{}
+
+func (fakeELBV2TagFailure) DescribeLoadBalancers(ctx context.Context, in *elbv2.DescribeLoadBalancersInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeLoadBalancersOutput, error) {
+	return &elbv2.DescribeLoadBalancersOutput{
+		LoadBalancers: []elbv2types.LoadBalancer{
+			testLoadBalancer("arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/app-lb/abc", "app-lb"),
+			testLoadBalancer("arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/net-lb/def", "net-lb"),
 		},
 	}, nil
+}
+
+func (fakeELBV2TagFailure) DescribeListeners(ctx context.Context, in *elbv2.DescribeListenersInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeListenersOutput, error) {
+	return &elbv2.DescribeListenersOutput{}, nil
+}
+
+func (fakeELBV2TagFailure) DescribeTargetGroups(ctx context.Context, in *elbv2.DescribeTargetGroupsInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeTargetGroupsOutput, error) {
+	return &elbv2.DescribeTargetGroupsOutput{}, nil
+}
+
+func (fakeELBV2TagFailure) DescribeTargetHealth(ctx context.Context, in *elbv2.DescribeTargetHealthInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeTargetHealthOutput, error) {
+	return &elbv2.DescribeTargetHealthOutput{}, nil
+}
+
+func (fakeELBV2TagFailure) DescribeTags(ctx context.Context, in *elbv2.DescribeTagsInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeTagsOutput, error) {
+	return nil, errors.New("access denied")
 }
 
 type fakeCloudTrail struct {
@@ -160,7 +231,7 @@ func (fakeSTS) GetCallerIdentity(context.Context, *sts.GetCallerIdentityInput, .
 }
 
 func TestCollectorCollectsAllRecordTypesAndAccumulatesErrors(t *testing.T) {
-	elb := &fakeELBV2{tagErr: errors.New("access denied")}
+	elb := &fakeELBV2{}
 	ct := &fakeCloudTrail{}
 	cfg, err := parsePluginConfig(map[string]string{
 		"accounts":            `[{"account_id":"123456789012","regions":["us-east-1"],"tags":{"environment":"prod"}}]`,
@@ -184,7 +255,7 @@ func TestCollectorCollectsAllRecordTypesAndAccumulatesErrors(t *testing.T) {
 
 	result := collector.Collect(context.Background())
 	if result.Err == nil {
-		t.Fatal("Collect returned nil error, want accumulated tag/target-health errors")
+		t.Fatal("Collect returned nil error, want accumulated target-health errors")
 	}
 	if got, want := len(result.Records), 6; got != want {
 		t.Fatalf("records = %d, want %d", got, want)
@@ -245,19 +316,99 @@ func TestCollectorCollectsAllRecordTypesAndAccumulatesErrors(t *testing.T) {
 		t.Fatalf("target health config = %#v", th.Input.Config)
 	}
 
-	var sawTagError, sawHealthError bool
+	var sawHealthError bool
 	for _, record := range result.Records {
 		for _, collectionErr := range record.Input.Collection.Errors {
-			if collectionErr.Scope == "tags" {
-				sawTagError = true
-			}
 			if collectionErr.Scope == "describe_target_health" {
 				sawHealthError = true
 			}
 		}
 	}
-	if !sawTagError || !sawHealthError {
-		t.Fatalf("expected tag and target health errors in records, saw tag=%v health=%v", sawTagError, sawHealthError)
+	if !sawHealthError {
+		t.Fatal("expected target health errors in records")
+	}
+}
+
+func TestCollectorBatchesTagCollection(t *testing.T) {
+	var arns []string
+	const tagBatchSize = 3
+	for i := 0; i < tagBatchSize+1; i++ {
+		arns = append(arns, fmt.Sprintf("arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/app-lb-%d/abc", i))
+	}
+	elb := &fakeELBV2ManyTags{resourceARNs: arns}
+	cfg, err := parsePluginConfig(map[string]string{
+		"accounts":            `[{"account_id":"123456789012","regions":["us-east-1"]}]`,
+		"api_timeout_seconds": "5",
+		"tag_batch_size":      fmt.Sprint(tagBatchSize),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector := &Collector{
+		Logger: hclog.NewNullLogger(),
+		Config: cfg,
+		Factory: fakeFactory{
+			targets: []ResolvedTarget{{Account: AccountContext{AccountID: "123456789012"}, Region: "us-east-1"}},
+			clients: AWSClientSet{ELBV2: elb, STS: fakeSTS{}},
+		},
+		Now: func() time.Time { return time.Date(2026, 5, 14, 12, 0, 0, 0, time.UTC) },
+	}
+
+	result := collector.Collect(context.Background())
+	if result.Err != nil {
+		t.Fatalf("Collect returned error: %v", result.Err)
+	}
+	if got, want := len(elb.tagRequests), 2; got != want {
+		t.Fatalf("DescribeTags calls = %d, want %d", got, want)
+	}
+	if got := len(elb.tagRequests[0]); got != tagBatchSize {
+		t.Fatalf("first DescribeTags request size = %d, want %d", got, tagBatchSize)
+	}
+	if got := len(elb.tagRequests[1]); got != 1 {
+		t.Fatalf("second DescribeTags request size = %d, want 1", got)
+	}
+	if got, want := len(result.Records), len(arns); got != want {
+		t.Fatalf("records = %d, want %d", got, want)
+	}
+	for _, record := range result.Records {
+		if record.Input.Tags["owner"] != "platform-team" {
+			t.Fatalf("record tags = %#v", record.Input.Tags)
+		}
+	}
+}
+
+func TestCollectorAddsTagErrorsForEachARNInFailedBatch(t *testing.T) {
+	cfg, err := parsePluginConfig(map[string]string{
+		"accounts":            `[{"account_id":"123456789012","regions":["us-east-1"]}]`,
+		"api_timeout_seconds": "5",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector := &Collector{
+		Logger: hclog.NewNullLogger(),
+		Config: cfg,
+		Factory: fakeFactory{
+			targets: []ResolvedTarget{{Account: AccountContext{AccountID: "123456789012"}, Region: "us-east-1"}},
+			clients: AWSClientSet{ELBV2: fakeELBV2TagFailure{}, STS: fakeSTS{}},
+		},
+		Now: func() time.Time { return time.Date(2026, 5, 14, 12, 0, 0, 0, time.UTC) },
+	}
+
+	result := collector.Collect(context.Background())
+	if result.Err == nil {
+		t.Fatal("Collect returned nil error, want tag errors")
+	}
+	var recordsWithTagErrors int
+	for _, record := range result.Records {
+		for _, collectionErr := range record.Input.Collection.Errors {
+			if collectionErr.Scope == "tags" {
+				recordsWithTagErrors++
+			}
+		}
+	}
+	if recordsWithTagErrors != 2 {
+		t.Fatalf("records with tag errors = %d, want 2", recordsWithTagErrors)
 	}
 }
 
