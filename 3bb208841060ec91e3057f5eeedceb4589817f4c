@@ -1,0 +1,37 @@
+lisa-addressed:
+---
+Comment (collector.go:310):
+`collectELBV2` appends the same `lbErrors` slice to both `errors["target"]` and every per-load-balancer `errors[lbARN]`. Since `collectTarget` later joins `allCollectionErrors(collected.errors)`, a single AWS call failure can be duplicated N times (once per load balancer), inflating the returned error and making logs noisy. Consider keeping call-level errors only once (e.g., under `"target"`) and reserving per-resource error slices for resource-specific failures (tags, per-TG health), or deduplicating before joining.
+---
+Comment (collector.go:330):
+Same duplication pattern for target groups: `tgErrors` are appended to `errors["target"]` and to every `errors[tgARN]`, which can multiply a single `DescribeTargetGroups` failure by the number of target groups when `allCollectionErrors` is joined. Recommend storing collection-call errors once and/or deduplicating before joining into the top-level `Collect` error.
+
+---
+Comment (collector.go:568):
+`matchEventsToLoadBalancers` is O(events × loadBalancers × listeners) due to nested loops and repeated `eventMentions` string scans over raw CloudTrail JSON. This can become expensive in accounts with many LBs/listeners or larger lookback windows. Consider indexing once (e.g., build maps from listenerARN->lbARN and lbARN/lbID sets, then for each event check its resource list / parsed requestParameters for a single match) to reduce repeated scans and avoid quadratic growth.
+
+---
+Comment (README.md:207):
+The coverage section says `DescribeTags` is only used for load balancer tags, but the implementation calls `DescribeTags` for listeners and target groups as well (and tests assert listener/target-group tags are populated). Either update this bullet to reflect that tags are collected for multiple ELBv2 resource types, or adjust collection to match the documented scope.
+
+---
+Comment (.github/workflows/build-and-upload.yml:37):
+The tag sanitization used to build the OCI image tag (`clean=... | tr ...`) no longer enforces Docker/OCI tag constraints like max length (128 chars) and a leading `[A-Za-z0-9_]`. This can produce invalid tags for unusual refs, causing release failures. Consider truncating to 128 chars and prefixing a safe character when the tag would start with `.` or `-` (or reuse the previous SAFE_TAG logic).
+---
+Comment (.github/workflows/build-and-upload.yml:38):
+`prerelease` is inferred from `GITHUB_REF_NAME` containing a hyphen. Many non-prerelease tags/versions (or organizational tag schemes) can include `-`, which would incorrectly skip publishing the `:latest` tag. Prefer deriving prerelease from the GitHub Release metadata (when available) or performing a stricter semver prerelease check instead of a simple substring match.
+---
+Comment (LICENSE:6):
+The `LICENSE` file appears to be a short paraphrase of Apache 2.0 rather than the full license text. Repositories typically include the complete, unmodified Apache License 2.0 terms (sections 1–9 plus the appendix) to avoid ambiguity and ensure compliance. Consider replacing this with the standard full Apache 2.0 license text.
+---
+Comment (.github/workflows/build-and-upload.yml:22):
+The GoReleaser action step no longer pins the GoReleaser CLI version (the previous workflow used `version: '~> v2'`). If the action defaults to `latest`, releases can become non-deterministic and may break when GoReleaser introduces changes. Consider explicitly setting the `version` input (or pinning to an exact GoReleaser version) for reproducible builds.
+
+Implementation guidance: In collector.go, update collectELBV2 so errors returned by collectLoadBalancers are stored only once under result.errors["target"]. Remove the append of lbErrors into result.errors[lbARN] inside the load balancer loop. Keep listenerErrors attached to the relevant load balancer/listener records, and do not remove the top-level result.errors["target"] append because Collect uses it to report target-level AWS API failures.
+Implementation guidance: In collector.go, update collectELBV2 so errors returned by collectTargetGroups are stored only once under result.errors["target"]. Remove the append of tgErrors into result.errors[tgARN] inside the target group loop. Keep healthErrors attached to each target group because those are per-target-group failures. This should prevent allCollectionErrors from multiplying one DescribeTargetGroups pagination/API error across every target group.
+Implementation guidance: In collector.go, refactor matchEventsToLoadBalancers to avoid the current loadBalancer x listener nested scan. Build a single identifier-to-load-balancer map before processing events: include each load balancer ARN, each non-empty loadBalancerID(lbARN), and each listener ARN mapped to its parent load balancer ARN. Then, for each CloudTrailEvent, iterate that identifier map once, call eventMentions(event, identifier), and append the event to the mapped load balancer only once per event/load-balancer pair using a small seen map. Preserve the current behavior of matching by load balancer ARN, load balancer resource ID, and known listener ARN, and keep CloudTrail events attached only to load balancer records.
+Implementation guidance: In README.md, update the Coverage section under CONFIG evidence. Keep the implementation as-is; tags are enrichment for multiple ELBv2 resource records. Change the DescribeTags bullet so it states that tags are collected for load balancers, listeners, and target groups, rather than only load balancer tags.
+Implementation guidance: In .github/workflows/build-and-upload.yml, in the `id: tag` bash step, harden the generated OCI tag. After replacing invalid characters with `tr -c '[:alnum:]._-' '-'`, ensure the value is non-empty, prefix a safe alphanumeric character such as `v` if it starts with `.` or `-`, and truncate the final tag to 128 characters before writing `value=` to `$GITHUB_OUTPUT`. Avoid reintroducing persisted credentials or changing the upload commands.
+Implementation guidance: In .github/workflows/build-and-upload.yml, replace the prerelease detection in the `id: tag` bash step. Do not use `[[ "$raw" == *-* ]]`. Instead, derive prerelease with a stricter semver prerelease regex against `GITHUB_REF_NAME`, for example treating only tags like `v1.2.3-rc.1` or `1.2.3-beta+build.5` as prerelease. Plain tags such as `v1.2.3`, branch names, or organization-specific refs containing hyphens should not automatically suppress the `:latest` upload unless they match a semver prerelease form.
+Implementation guidance: Replace LICENSE with the complete, standard Apache License 2.0 text, including sections 1 through 9 and the APPENDIX. Do not paraphrase or shorten clauses, and do not add project-specific text inside the license body.
+Implementation guidance: In .github/workflows/build-and-upload.yml, add the GoReleaser CLI version input to the existing goreleaser/goreleaser-action step. Under its `with:` block, set `version: '~> v2'` along with the existing `args: release --clean`, matching the previous workflow behavior and keeping the action SHA pin unchanged.
