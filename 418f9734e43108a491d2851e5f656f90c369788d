@@ -1,0 +1,107 @@
+lisa-addressed:
+---
+Comment (.github/workflows/test.yml:10):
+_⚠️ Potential issue_ | _🟠 Major_ | _⚡ Quick win_
+
+**Disable persisted Git credentials in the test job checkout step.**
+
+This job doesn’t need repository write credentials, so keep them out of the workspace.
+
+<details>
+<summary>Suggested fix</summary>
+
+```diff
+-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
++      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
++        with:
++          persist-credentials: false
+```
+</details>
+
+<!-- suggestion_start -->
+
+<details>
+<summary>📝 Committable suggestion</summary>
+
+> ‼️ **IMPORTANT**
+> Carefully review the code before committing. Ensure that it accurately replaces the highlighted code, contains no missing lines, and has no issues with indentation. Thoroughly test & benchmark the code to ensure it meets the requirements.
+
+```suggestion
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+```
+
+</details>
+
+<!-- suggestion_end -->
+
+<details>
+<summary>🧰 Tools</summary>
+
+<details>
+<summary>🪛 zizmor (1.25.2)</summary>
+
+[warning] 10-10: credential persistence through GitHub Actions artifacts (artipacked): does not set persist-credentials: false
+
+(artipacked)
+
+</details>
+
+</details>
+
+<details>
+<summary>🤖 Prompt for AI Agents</summary>
+
+```
+Verify each finding against current code. Fix only still-valid issues, skip the
+rest with a brief reason, keep changes minimal, and validate.
+
+In @.github/workflows/test.yml at line 10, The checkout step currently uses
+"uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"; update that
+step to disable persisting Git credentials by adding the input
+persist-credentials: false to the actions/checkout step so the job does not
+leave repository write credentials in the workspace.
+```
+
+</details>
+
+<!-- fingerprinting:phantom:poseidon:hawk -->
+
+<!-- This is an auto-generated comment by CodeRabbit -->
+---
+Comment (collector.go:326):
+_🧹 Nitpick_ | _🔵 Trivial_ | _🏗️ Heavy lift_
+
+**Batch tag lookups instead of calling `DescribeTags` once per resource.**
+
+These loops add one remote call per listener and per target group, so collection latency and throttling risk now grow directly with inventory size. Since `DescribeTagsInput.ResourceArns` already accepts multiple ARNs, fetch tags in chunks and then fan the results back into `result.tags` instead of issuing a separate request for every resource.
+
+Also applies to: 336-340
+
+<details>
+<summary>🤖 Prompt for AI Agents</summary>
+
+```
+Verify each finding against current code. Fix only still-valid issues, skip the
+rest with a brief reason, keep changes minimal, and validate.
+
+In `@collector.go` around lines 320 - 326, The per-resource calls to collectTags
+cause N remote DescribeTags requests; instead gather all listener and target
+group ARNs in the collector loop and call DescribeTags with ResourceArns in
+configurable-size chunks, then map the returned TagDescriptions back into
+result.tags and record any per-ARN errors as CollectionError (use the same
+CollectionError type). Update the current usage sites that call
+collectTags(listenerARN) and collectTags(targetGroupARN) (and the similar block
+at 336-340) to call a new batch helper (or extend collectTags to accept
+[]string) that performs chunked DescribeTagsInput.ResourceArns requests and fans
+results/errors back into result.tags and result.errors.
+```
+
+</details>
+
+<!-- fingerprinting:phantom:medusa:grasshopper -->
+
+<!-- This is an auto-generated comment by CodeRabbit -->
+Implementation guidance: In .github/workflows/test.yml, update the single actions/checkout step under jobs.test.steps to add a with block containing persist-credentials: false. Preserve the existing pinned actions/checkout SHA and indentation; do not change setup-go or test commands.
+Implementation guidance: In collector.go, replace the per-ARN collectTags calls in Collector.collectELBV2 with batched tag collection. Keep load balancer tags, listener tags, and target group tags associated with their own ARN keys in result.tags. A low-risk approach: add a helper such as collectTagsBatch(ctx, client, arns []string) (map[string]map[string]string, map[string][]CollectionError) that filters empty ARNs, chunks ResourceArns before calling client.DescribeTags, builds tagsByARN from each returned TagDescription.ResourceArn, initializes empty maps for ARNs with no tags, and returns CollectionError entries with Scope "tags" for each ARN in a failed chunk. AWS ELBv2 DescribeTags supports multiple ResourceArns but has a request limit, so define a small constant such as maxDescribeTagsResourceArns = 20 and do not send larger chunks. In collectELBV2, after load balancers are discovered collect their ARNs and call the batch helper once; after each load balancer listeners are discovered collect all listener ARNs and batch them after the load balancer loop; after target groups are discovered batch all target group ARNs before collecting target health. Preserve existing listener/target-group error behavior and append tag errors to result.errors[arn]. Update collector_test.go fakeELBV2 DescribeTags expectations so it handles multiple ResourceArns in a single call and add/adjust tests to verify tags still land on load balancer, listener, and target group records.
