@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 
 	policyManager "github.com/compliance-framework/agent/policy-manager"
 	"github.com/compliance-framework/agent/runner"
@@ -39,6 +40,7 @@ func requestWithDefaultPolicyBehavior(req *proto.EvalRequest) *proto.EvalRequest
 
 type CompliancePlugin struct {
 	logger       hclog.Logger
+	mu           sync.RWMutex
 	rawConfig    map[string]string
 	parsedConfig *PluginConfig
 	factory      AWSClientFactory
@@ -50,12 +52,14 @@ func (l *CompliancePlugin) Configure(req *proto.ConfigureRequest) (*proto.Config
 	if err != nil {
 		return nil, err
 	}
-	l.rawConfig = req.GetConfig()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.rawConfig = cloneStringMap(req.GetConfig())
 	l.parsedConfig = parsed
 	if req.GetPolicyData() != nil {
-		l.policyData = req.GetPolicyData().AsMap()
+		l.policyData = clonePolicyInputs(req.GetPolicyData().AsMap())
 	} else {
-		l.policyData = parsed.PolicyInputs
+		l.policyData = clonePolicyInputs(parsed.PolicyInputs)
 	}
 	return &proto.ConfigureResponse{}, nil
 }
@@ -67,16 +71,26 @@ func (l *CompliancePlugin) Init(req *proto.InitRequest, apiHelper runner.ApiHelp
 
 func (l *CompliancePlugin) Eval(req *proto.EvalRequest, apiHelper runner.ApiHelper) (*proto.EvalResponse, error) {
 	ctx := context.Background()
+	if req == nil {
+		return &proto.EvalResponse{Status: proto.ExecutionStatus_FAILURE}, fmt.Errorf("eval request is nil")
+	}
+
+	l.mu.Lock()
 	if l.parsedConfig == nil {
 		parsed, err := parsePluginConfig(l.rawConfig)
 		if err != nil {
+			l.mu.Unlock()
 			return &proto.EvalResponse{Status: proto.ExecutionStatus_FAILURE}, err
 		}
 		l.parsedConfig = parsed
 	}
 	if l.policyData == nil {
-		l.policyData = l.parsedConfig.PolicyInputs
+		l.policyData = clonePolicyInputs(l.parsedConfig.PolicyInputs)
 	}
+	parsedConfig := l.parsedConfig
+	policyData := clonePolicyInputs(l.policyData)
+	policyLabels := cloneStringMap(parsedConfig.PolicyLabels)
+	l.mu.Unlock()
 
 	policyRequest := requestWithDefaultPolicyBehavior(req)
 	pathsByType := map[string][]string{
@@ -86,14 +100,14 @@ func (l *CompliancePlugin) Eval(req *proto.EvalRequest, apiHelper runner.ApiHelp
 		resourceTypeTargetHealth: policyRequest.PolicyPathsForBehavior(behaviorTargetHealth),
 	}
 
-	collector := &Collector{Logger: l.logger.Named("collector"), Config: l.parsedConfig, Factory: l.factory}
+	collector := &Collector{Logger: l.logger.Named("collector"), Config: parsedConfig, Factory: l.factory}
 	result := collector.Collect(ctx)
 
 	evidences := make([]*proto.Evidence, 0)
 	var accumulated error
 	accumulated = errors.Join(accumulated, result.Err)
 	for _, record := range result.Records {
-		recordEvidence, err := l.evaluateRecord(ctx, pathsByType[record.Input.Resource.Type], record)
+		recordEvidence, err := l.evaluateRecord(ctx, pathsByType[record.Input.Resource.Type], record, policyLabels, policyData)
 		evidences = append(evidences, recordEvidence...)
 		accumulated = errors.Join(accumulated, err)
 	}
@@ -109,10 +123,10 @@ func (l *CompliancePlugin) Eval(req *proto.EvalRequest, apiHelper runner.ApiHelp
 	return &proto.EvalResponse{Status: proto.ExecutionStatus_SUCCESS}, nil
 }
 
-func (l *CompliancePlugin) evaluateRecord(ctx context.Context, policyPaths []string, record *ResourceRecord) ([]*proto.Evidence, error) {
+func (l *CompliancePlugin) evaluateRecord(ctx context.Context, policyPaths []string, record *ResourceRecord, policyLabels map[string]string, policyData map[string]interface{}) ([]*proto.Evidence, error) {
 	var accumulated error
 	evidences := make([]*proto.Evidence, 0)
-	labels := internal.MergeMaps(l.parsedConfig.PolicyLabels, record.Labels)
+	labels := internal.MergeMaps(policyLabels, record.Labels)
 	activities := []*proto.Activity{{
 		Title:       "Collect AWS ELBv2 evidence",
 		Description: "Collected read-only Elastic Load Balancing v2 configuration and CloudTrail data for policy evaluation.",
@@ -128,7 +142,7 @@ func (l *CompliancePlugin) evaluateRecord(ctx context.Context, policyPaths []str
 	for _, policyPath := range policyPaths {
 		processor := policyManager.NewPolicyProcessor(
 			l.logger, labels, subjectsForRecord(*record), defaultComponents(),
-			inventoryForRecord(*record), defaultActors(), activities, l.policyData,
+			inventoryForRecord(*record), defaultActors(), activities, policyData,
 		)
 		evidence, perr := processor.GenerateResults(ctx, policyPath, input)
 		evidences = append(evidences, evidence...)
@@ -137,6 +151,14 @@ func (l *CompliancePlugin) evaluateRecord(ctx context.Context, policyPaths []str
 		}
 	}
 	return evidences, accumulated
+}
+
+func cloneStringMap(input map[string]string) map[string]string {
+	out := make(map[string]string, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
 }
 
 func buildSubjectTemplates() []*proto.SubjectTemplate {

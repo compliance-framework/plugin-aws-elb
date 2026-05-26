@@ -118,7 +118,7 @@ func newLoadBalancerRecord(account AccountContext, region string, lb elbv2types.
 	return &record
 }
 
-func newListenerRecord(account AccountContext, region string, listener elbv2types.Listener, errors []CollectionError, policyInputs map[string]interface{}, collectedAt time.Time) *ResourceRecord {
+func newListenerRecord(account AccountContext, region string, listener elbv2types.Listener, tags map[string]string, errors []CollectionError, policyInputs map[string]interface{}, collectedAt time.Time) *ResourceRecord {
 	arn := aws.ToString(listener.ListenerArn)
 	id := arnResourcePart(arn)
 	config := map[string]interface{}{
@@ -129,11 +129,11 @@ func newListenerRecord(account AccountContext, region string, listener elbv2type
 		"ssl_policy":        aws.ToString(listener.SslPolicy),
 		"certificate_arn":   firstCertificateARN(listener.Certificates),
 	}
-	record := newResourceRecord(account, region, ResourceIdentity{ID: id, ARN: arn, Type: resourceTypeListener}, config, nil, nil, errors, policyInputs, collectedAt, nil, listener, "aws-elbv2-listener", fmt.Sprintf("aws-elbv2-listener/%s/%s/%s", account.AccountID, region, id), "AWS ELBv2 Listener ["+id+"]")
+	record := newResourceRecord(account, region, ResourceIdentity{ID: id, ARN: arn, Type: resourceTypeListener}, config, nil, tags, errors, policyInputs, collectedAt, nil, listener, "aws-elbv2-listener", fmt.Sprintf("aws-elbv2-listener/%s/%s/%s", account.AccountID, region, id), "AWS ELBv2 Listener ["+id+"]")
 	return &record
 }
 
-func newTargetGroupRecord(account AccountContext, region string, targetGroup elbv2types.TargetGroup, errors []CollectionError, policyInputs map[string]interface{}, collectedAt time.Time) *ResourceRecord {
+func newTargetGroupRecord(account AccountContext, region string, targetGroup elbv2types.TargetGroup, tags map[string]string, errors []CollectionError, policyInputs map[string]interface{}, collectedAt time.Time) *ResourceRecord {
 	arn := aws.ToString(targetGroup.TargetGroupArn)
 	id := targetGroupID(arn)
 	if id == "" {
@@ -149,7 +149,7 @@ func newTargetGroupRecord(account AccountContext, region string, targetGroup elb
 		"healthy_threshold_count":   aws.ToInt32(targetGroup.HealthyThresholdCount),
 		"unhealthy_threshold_count": aws.ToInt32(targetGroup.UnhealthyThresholdCount),
 	}
-	record := newResourceRecord(account, region, ResourceIdentity{ID: id, ARN: arn, Type: resourceTypeTargetGroup}, config, nil, nil, errors, policyInputs, collectedAt, nil, targetGroup, "aws-elbv2-target-group", fmt.Sprintf("aws-elbv2-target-group/%s/%s/%s", account.AccountID, region, id), "AWS ELBv2 Target Group ["+id+"]")
+	record := newResourceRecord(account, region, ResourceIdentity{ID: id, ARN: arn, Type: resourceTypeTargetGroup}, config, nil, tags, errors, policyInputs, collectedAt, nil, targetGroup, "aws-elbv2-target-group", fmt.Sprintf("aws-elbv2-target-group/%s/%s/%s", account.AccountID, region, id), "AWS ELBv2 Target Group ["+id+"]")
 	return &record
 }
 

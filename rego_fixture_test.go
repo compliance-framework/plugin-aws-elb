@@ -27,7 +27,7 @@ func TestRegoFixturesEvaluateEachRecordShape(t *testing.T) {
 			Port:            aws.Int32(443),
 			SslPolicy:       aws.String("ELBSecurityPolicy-TLS13-1-2-2021-06"),
 			Certificates:    []elbv2types.Certificate{{CertificateArn: aws.String("arn:aws:acm:us-east-1:123456789012:certificate/cert1")}},
-		}, nil, nil, collectedAt),
+		}, map[string]string{"owner": "platform"}, nil, nil, collectedAt),
 		newTargetGroupRecord(account, "us-east-1", elbv2types.TargetGroup{
 			TargetGroupArn:          aws.String("arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/app-tg/ghi"),
 			TargetGroupName:         aws.String("app-tg"),
@@ -38,7 +38,7 @@ func TestRegoFixturesEvaluateEachRecordShape(t *testing.T) {
 			HealthyThresholdCount:   aws.Int32(3),
 			UnhealthyThresholdCount: aws.Int32(2),
 			LoadBalancerArns:        []string{"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/app-lb/abc"},
-		}, nil, nil, collectedAt),
+		}, map[string]string{"owner": "platform"}, nil, nil, collectedAt),
 		newTargetHealthRecord(account, "us-east-1", "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/app-tg/ghi", elbv2types.TargetHealthDescription{
 			Target:       &elbv2types.TargetDescription{Id: aws.String("i-1234567890abcdef0")},
 			TargetHealth: &elbv2types.TargetHealth{State: elbv2types.TargetHealthStateEnumUnhealthy},
@@ -52,7 +52,7 @@ func TestRegoFixturesEvaluateEachRecordShape(t *testing.T) {
 	}
 	for _, record := range records {
 		policyDir := writeFixturePolicy(t, record.Input.Resource.Type)
-		evidence, err := plugin.evaluateRecord(context.Background(), []string{policyDir}, record)
+		evidence, err := plugin.evaluateRecord(context.Background(), []string{policyDir}, record, plugin.parsedConfig.PolicyLabels, plugin.policyData)
 		if err != nil {
 			t.Fatalf("evaluate %s: %v", record.Input.Resource.Type, err)
 		}

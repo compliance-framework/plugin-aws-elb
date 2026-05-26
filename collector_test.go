@@ -228,10 +228,16 @@ func TestCollectorCollectsAllRecordTypesAndAccumulatesErrors(t *testing.T) {
 	if listener.Input.Config["certificate_arn"] == "" || listener.Input.Config["ssl_policy"] == "" {
 		t.Fatalf("listener TLS fields missing: %#v", listener.Input.Config)
 	}
+	if listener.Input.Tags["owner"] != "platform-team" {
+		t.Fatalf("listener tags = %#v", listener.Input.Tags)
+	}
 
 	tg := byType[resourceTypeTargetGroup][0]
 	if tg.Input.Config["health_check_path"] != "/healthz" || tg.Input.Config["healthy_threshold_count"] != int32(3) {
 		t.Fatalf("target group config = %#v", tg.Input.Config)
+	}
+	if tg.Input.Tags["owner"] != "platform-team" {
+		t.Fatalf("target group tags = %#v", tg.Input.Tags)
 	}
 
 	th := byType[resourceTypeTargetHealth][0]
@@ -252,6 +258,40 @@ func TestCollectorCollectsAllRecordTypesAndAccumulatesErrors(t *testing.T) {
 	}
 	if !sawTagError || !sawHealthError {
 		t.Fatalf("expected tag and target health errors in records, saw tag=%v health=%v", sawTagError, sawHealthError)
+	}
+}
+
+func TestCollectorCollectsWithNonPositiveMaxConcurrency(t *testing.T) {
+	cfg, err := parsePluginConfig(map[string]string{
+		"accounts":            `[{"account_id":"123456789012","regions":["us-east-1"]}]`,
+		"api_timeout_seconds": "5",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.MaxConcurrency = 0
+	collector := &Collector{
+		Logger: hclog.NewNullLogger(),
+		Config: cfg,
+		Factory: fakeFactory{
+			targets: []ResolvedTarget{{Account: AccountContext{AccountID: "123456789012"}, Region: "us-east-1"}},
+			clients: AWSClientSet{ELBV2: &fakeELBV2{}, CloudTrail: &fakeCloudTrail{}, STS: fakeSTS{}},
+		},
+		Now: func() time.Time { return time.Date(2026, 5, 14, 12, 0, 0, 0, time.UTC) },
+	}
+
+	done := make(chan CollectionResult, 1)
+	go func() {
+		done <- collector.Collect(context.Background())
+	}()
+
+	select {
+	case result := <-done:
+		if len(result.Records) == 0 {
+			t.Fatalf("records = 0, want records")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Collect hung with MaxConcurrency 0")
 	}
 }
 

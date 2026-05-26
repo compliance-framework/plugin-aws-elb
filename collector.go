@@ -208,6 +208,9 @@ func (c *Collector) Collect(ctx context.Context) CollectionResult {
 	}
 
 	workerCount := c.Config.MaxConcurrency
+	if workerCount <= 0 {
+		workerCount = 1
+	}
 	if workerCount > len(targets) {
 		workerCount = len(targets)
 	}
@@ -273,13 +276,13 @@ func (c *Collector) collectTarget(ctx context.Context, factory AWSClientFactory,
 
 		for _, listener := range collected.listeners[lbARN] {
 			listenerARN := aws.ToString(listener.ListenerArn)
-			records = append(records, newListenerRecord(target.Account, target.Region, listener, collected.errors[listenerARN], c.Config.PolicyInputs, collectedAt))
+			records = append(records, newListenerRecord(target.Account, target.Region, listener, collected.tags[listenerARN], collected.errors[listenerARN], c.Config.PolicyInputs, collectedAt))
 		}
 	}
 
 	for _, targetGroup := range collected.targetGroups {
 		tgARN := aws.ToString(targetGroup.TargetGroupArn)
-		records = append(records, newTargetGroupRecord(target.Account, target.Region, targetGroup, collected.errors[tgARN], c.Config.PolicyInputs, collectedAt))
+		records = append(records, newTargetGroupRecord(target.Account, target.Region, targetGroup, collected.tags[tgARN], collected.errors[tgARN], c.Config.PolicyInputs, collectedAt))
 		for _, health := range collected.targetHealth[tgARN] {
 			records = append(records, newTargetHealthRecord(target.Account, target.Region, tgARN, health, collected.errors[tgARN], c.Config.PolicyInputs, collectedAt))
 		}
@@ -314,7 +317,13 @@ func (c *Collector) collectELBV2(ctx context.Context, client ELBV2API) targetCol
 		result.listeners[lbARN] = listeners
 		result.errors[lbARN] = append(result.errors[lbARN], listenerErrors...)
 		for _, listener := range listeners {
-			result.errors[aws.ToString(listener.ListenerArn)] = append(result.errors[aws.ToString(listener.ListenerArn)], listenerErrors...)
+			listenerARN := aws.ToString(listener.ListenerArn)
+			result.errors[listenerARN] = append(result.errors[listenerARN], listenerErrors...)
+			listenerTags, tagErr := c.collectTags(ctx, client, listenerARN)
+			if tagErr != nil {
+				result.errors[listenerARN] = append(result.errors[listenerARN], CollectionError{Scope: "tags", Message: tagErr.Error()})
+			}
+			result.tags[listenerARN] = listenerTags
 		}
 	}
 
@@ -324,6 +333,11 @@ func (c *Collector) collectELBV2(ctx context.Context, client ELBV2API) targetCol
 	for _, targetGroup := range targetGroups {
 		tgARN := aws.ToString(targetGroup.TargetGroupArn)
 		result.errors[tgARN] = append(result.errors[tgARN], tgErrors...)
+		tgTags, tagErr := c.collectTags(ctx, client, tgARN)
+		if tagErr != nil {
+			result.errors[tgARN] = append(result.errors[tgARN], CollectionError{Scope: "tags", Message: tagErr.Error()})
+		}
+		result.tags[tgARN] = tgTags
 		health, healthErrors := c.collectTargetHealth(ctx, client, tgARN)
 		result.targetHealth[tgARN] = health
 		result.errors[tgARN] = append(result.errors[tgARN], healthErrors...)
