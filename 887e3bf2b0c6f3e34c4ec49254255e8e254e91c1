@@ -1,0 +1,538 @@
+lisa-addressed:
+---
+Comment (.github/workflows/build-and-upload.yml:14):
+_⚠️ Potential issue_ | _🟠 Major_ | _⚡ Quick win_
+
+**Disable persisted Git credentials on checkout.**
+
+This job does not need git pushes, so keeping credentials in the local checkout is unnecessary exposure.
+
+<details>
+<summary>Suggested fix</summary>
+
+```diff
+-      - uses: actions/checkout@v4
++      - uses: actions/checkout@v4
++        with:
++          persist-credentials: false
+```
+</details>
+
+<!-- suggestion_start -->
+
+<details>
+<summary>📝 Committable suggestion</summary>
+
+> ‼️ **IMPORTANT**
+> Carefully review the code before committing. Ensure that it accurately replaces the highlighted code, contains no missing lines, and has no issues with indentation. Thoroughly test & benchmark the code to ensure it meets the requirements.
+
+```suggestion
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+```
+
+</details>
+
+<!-- suggestion_end -->
+
+<details>
+<summary>🧰 Tools</summary>
+
+<details>
+<summary>🪛 zizmor (1.25.2)</summary>
+
+[warning] 14-14: credential persistence through GitHub Actions artifacts (artipacked): does not set persist-credentials: false
+
+(artipacked)
+
+---
+
+[error] 14-14: unpinned action reference (unpinned-uses): action is not pinned to a hash (required by blanket policy)
+
+(unpinned-uses)
+
+</details>
+
+</details>
+
+<details>
+<summary>🤖 Prompt for AI Agents</summary>
+
+```
+Verify each finding against current code. Fix only still-valid issues, skip the
+rest with a brief reason, keep changes minimal, and validate.
+
+In @.github/workflows/build-and-upload.yml at line 14, Update the checkout step
+using actions/checkout@v4 to disable persisted Git credentials by adding the
+input persist-credentials: false on that step; locate the workflow step that
+uses "uses: actions/checkout@v4" and add the persist-credentials key so the job
+does not retain repository credentials in the workspace.
+```
+
+</details>
+
+<!-- fingerprinting:phantom:poseidon:hawk -->
+
+<!-- This is an auto-generated comment by CodeRabbit -->
+---
+Comment (.github/workflows/build-and-upload.yml:18):
+_⚠️ Potential issue_ | _🟠 Major_ | _⚡ Quick win_
+
+<details>
+<summary>🧩 Analysis chain</summary>
+
+🏁 Script executed:
+
+```shell
+#!/bin/bash
+# Verify all workflow action refs are SHA-pinned (40 hex chars).
+rg -nP '^\s*-\s*uses:\s*[^@\s]+@([0-9a-f]{40}|.+)$' .github/workflows/*.yml
+echo "---- Non-SHA refs (should be empty):"
+rg -nP '^\s*-\s*uses:\s*[^@\s]+@(?![0-9a-f]{40}\b)' .github/workflows/*.yml
+```
+
+Repository: compliance-framework/plugin-aws-elb
+
+Length of output: 852
+
+---
+
+🏁 Script executed:
+
+```shell
+# Enforce SHA-pinned action refs (40 hex chars)
+rg -nP '^\s*-\s*uses:\s*[^@\s]+@(?![0-9a-f]{40}\b)' .github/workflows/*.yml
+```
+
+Repository: compliance-framework/plugin-aws-elb
+
+Length of output: 447
+
+---
+
+</details>
+
+**Pin `uses:` GitHub Actions to commit SHAs (no moving tags).**
+`./.github/workflows/build-and-upload.yml` uses `actions/checkout@v4`, `actions/setup-go@v5`, and `goreleaser/goreleaser-action@v6`; pin each to a full commit SHA to prevent tag retargeting/supply-chain drift. Same issue exists in `./.github/workflows/test.yml` (`actions/checkout@v4`, `actions/setup-go@v5`).
+
+<details>
+<summary>Suggested hardening</summary>
+
+```diff
+-      - uses: actions/checkout@v4
+-      - uses: actions/setup-go@v5
++      - uses: actions/checkout@<full_commit_sha>
++      - uses: actions/setup-go@<full_commit_sha>
+...
+-      - uses: goreleaser/goreleaser-action@v6
++      - uses: goreleaser/goreleaser-action@<full_commit_sha>
+```
+</details>
+
+<details>
+<summary>🧰 Tools</summary>
+
+<details>
+<summary>🪛 zizmor (1.25.2)</summary>
+
+[warning] 14-14: credential persistence through GitHub Actions artifacts (artipacked): does not set persist-credentials: false
+
+(artipacked)
+
+---
+
+[error] 14-14: unpinned action reference (unpinned-uses): action is not pinned to a hash (required by blanket policy)
+
+(unpinned-uses)
+
+---
+
+[error] 15-15: unpinned action reference (unpinned-uses): action is not pinned to a hash (required by blanket policy)
+
+(unpinned-uses)
+
+---
+
+[error] 18-18: unpinned action reference (unpinned-uses): action is not pinned to a hash (required by blanket policy)
+
+(unpinned-uses)
+
+---
+
+[error] 15-15: runtime artifacts potentially vulnerable to a cache poisoning attack (cache-poisoning): enables caching by default
+
+(cache-poisoning)
+
+</details>
+
+</details>
+
+<details>
+<summary>🤖 Prompt for AI Agents</summary>
+
+```
+Verify each finding against current code. Fix only still-valid issues, skip the
+rest with a brief reason, keep changes minimal, and validate.
+
+In @.github/workflows/build-and-upload.yml around lines 14 - 18, Update the
+workflow uses lines so the actions are pinned to specific commit SHAs instead of
+moving tags: replace occurrences of "actions/checkout@v4",
+"actions/setup-go@v5", and "goreleaser/goreleaser-action@v6" in
+.github/workflows/build-and-upload.yml (and the "actions/checkout@v4" /
+"actions/setup-go@v5" usages in .github/workflows/test.yml) with the
+corresponding full commit SHA refs (e.g., actions/checkout@<full-sha>,
+actions/setup-go@<full-sha>, goreleaser/goreleaser-action@<full-sha>) so the
+workflows reference immutable commits rather than floating tags.
+```
+
+</details>
+
+<!-- fingerprinting:phantom:poseidon:hawk -->
+
+<!-- This is an auto-generated comment by CodeRabbit -->
+---
+Comment (collector.go:231):
+_⚠️ Potential issue_ | _🟠 Major_ | _⚡ Quick win_
+
+**Prevent worker-pool deadlock when concurrency is non-positive.**
+
+At Line 210, if `MaxConcurrency` is `0` or negative, no workers start and the send loop on `jobs` blocks indefinitely.
+
+<details>
+<summary>Suggested fix</summary>
+
+```diff
+ 	workerCount := c.Config.MaxConcurrency
++	if workerCount <= 0 {
++		return CollectionResult{Err: errors.New("max_concurrency must be greater than zero")}
++	}
+ 	if workerCount > len(targets) {
+ 		workerCount = len(targets)
+ 	}
+```
+</details>
+
+<details>
+<summary>🤖 Prompt for AI Agents</summary>
+
+```
+Verify each finding against current code. Fix only still-valid issues, skip the
+rest with a brief reason, keep changes minimal, and validate.
+
+In `@collector.go` around lines 210 - 231, The worker pool can deadlock if
+c.Config.MaxConcurrency <= 0 because workerCount becomes 0 and the job sender
+blocks on the unbuffered jobs channel; ensure workerCount is at least 1 by
+setting workerCount = max(1, c.Config.MaxConcurrency) (or similar) before
+creating workers and sending into jobs, or alternatively make jobs buffered with
+capacity len(targets); update the code around workerCount, jobs, and the
+goroutine spawn (function literal using targetCtx and cancel, c.collectTarget,
+results channel) to handle zero/negative MaxConcurrency safely so the for _,
+target := range targets { jobs <- target } loop cannot block forever.
+```
+
+</details>
+
+<!-- fingerprinting:phantom:poseidon:hawk -->
+
+<!-- This is an auto-generated comment by CodeRabbit -->
+---
+Comment (collector.go:330):
+_⚠️ Potential issue_ | _🟠 Major_ | _⚡ Quick win_
+
+**Collect and propagate tags for listener and target-group records.**
+
+Only load balancer tags are fetched and attached. Listener/target-group records are emitted without resource tags, which breaks tag-based policy evaluation for those resource types.
+
+<details>
+<summary>Suggested direction</summary>
+
+```diff
+@@
+ 		listeners, listenerErrors := c.collectListeners(ctx, client, lbARN)
+ 		result.listeners[lbARN] = listeners
+ 		result.errors[lbARN] = append(result.errors[lbARN], listenerErrors...)
+ 		for _, listener := range listeners {
+-			result.errors[aws.ToString(listener.ListenerArn)] = append(result.errors[aws.ToString(listener.ListenerArn)], listenerErrors...)
++			listenerARN := aws.ToString(listener.ListenerArn)
++			result.errors[listenerARN] = append(result.errors[listenerARN], listenerErrors...)
++			listenerTags, tagErr := c.collectTags(ctx, client, listenerARN)
++			if tagErr != nil {
++				result.errors[listenerARN] = append(result.errors[listenerARN], CollectionError{Scope: "tags", Message: tagErr.Error()})
++			}
++			result.tags[listenerARN] = listenerTags
+ 		}
+ 	}
+@@
+ 	for _, targetGroup := range targetGroups {
+ 		tgARN := aws.ToString(targetGroup.TargetGroupArn)
+ 		result.errors[tgARN] = append(result.errors[tgARN], tgErrors...)
++		tgTags, tagErr := c.collectTags(ctx, client, tgARN)
++		if tagErr != nil {
++			result.errors[tgARN] = append(result.errors[tgARN], CollectionError{Scope: "tags", Message: tagErr.Error()})
++		}
++		result.tags[tgARN] = tgTags
+ 		health, healthErrors := c.collectTargetHealth(ctx, client, tgARN)
+ 		result.targetHealth[tgARN] = health
+ 		result.errors[tgARN] = append(result.errors[tgARN], healthErrors...)
+ 	}
+```
+
+Also pass `collected.tags[listenerARN]` / `collected.tags[tgARN]` into `newListenerRecord` and `newTargetGroupRecord` (and update those constructors to accept `tags`).
+</details>
+
+Also applies to: 274-285
+
+<details>
+<summary>🤖 Prompt for AI Agents</summary>
+
+```
+Verify each finding against current code. Fix only still-valid issues, skip the
+rest with a brief reason, keep changes minimal, and validate.
+
+In `@collector.go` around lines 308 - 330, Listeners and target-groups are emitted
+without their resource tags; for each listener ARN and target-group ARN call
+c.collectTags(ctx, client, arn) (similar to how LB tags are collected) and store
+them in result.tags[arn], append any returned CollectionError into
+result.errors[arn], then pass those tags into newListenerRecord and
+newTargetGroupRecord (update those constructors to accept a tags parameter) so
+listener and target-group records include their own tags for policy evaluation.
+```
+
+</details>
+
+<!-- fingerprinting:phantom:poseidon:hawk -->
+
+<!-- This is an auto-generated comment by CodeRabbit -->
+---
+Comment (main.go:46):
+_⚠️ Potential issue_ | _🟠 Major_ | _⚡ Quick win_
+
+**Synchronize shared plugin state to avoid data races across gRPC calls.**
+
+`CompliancePlugin` stores mutable request-derived state on the struct and both `Configure` and `Eval` read/write it without locking. Concurrent calls can race and produce inconsistent config/policy inputs.
+
+<details>
+<summary>Suggested fix</summary>
+
+```diff
+ import (
+ 	"context"
+ 	"encoding/json"
+ 	"errors"
+ 	"fmt"
++	"sync"
+@@
+ type CompliancePlugin struct {
+ 	logger       hclog.Logger
++	mu           sync.RWMutex
+ 	rawConfig    map[string]string
+ 	parsedConfig *PluginConfig
+ 	factory      AWSClientFactory
+ 	policyData   map[string]interface{}
+ }
+@@
+ func (l *CompliancePlugin) Configure(req *proto.ConfigureRequest) (*proto.ConfigureResponse, error) {
+ 	parsed, err := parsePluginConfig(req.GetConfig())
+ 	if err != nil {
+ 		return nil, err
+ 	}
++	l.mu.Lock()
++	defer l.mu.Unlock()
+ 	l.rawConfig = req.GetConfig()
+ 	l.parsedConfig = parsed
+@@
+ func (l *CompliancePlugin) Eval(req *proto.EvalRequest, apiHelper runner.ApiHelper) (*proto.EvalResponse, error) {
+ 	ctx := context.Background()
++	l.mu.Lock()
+ 	if l.parsedConfig == nil {
+ 		parsed, err := parsePluginConfig(l.rawConfig)
+ 		if err != nil {
++			l.mu.Unlock()
+ 			return &proto.EvalResponse{Status: proto.ExecutionStatus_FAILURE}, err
+ 		}
+ 		l.parsedConfig = parsed
+ 	}
+ 	if l.policyData == nil {
+ 		l.policyData = l.parsedConfig.PolicyInputs
+ 	}
++	parsedConfig := l.parsedConfig
++	policyData := l.policyData
++	l.mu.Unlock()
+@@
+-	collector := &Collector{Logger: l.logger.Named("collector"), Config: l.parsedConfig, Factory: l.factory}
++	collector := &Collector{Logger: l.logger.Named("collector"), Config: parsedConfig, Factory: l.factory}
+@@
+-		recordEvidence, err := l.evaluateRecord(ctx, pathsByType[record.Input.Resource.Type], record)
++		recordEvidence, err := l.evaluateRecordWithPolicyData(ctx, pathsByType[record.Input.Resource.Type], record, parsedConfig, policyData)
+```
+
+</details>
+
+Also applies to: 48-60, 68-79
+
+<details>
+<summary>🤖 Prompt for AI Agents</summary>
+
+```
+Verify each finding against current code. Fix only still-valid issues, skip the
+rest with a brief reason, keep changes minimal, and validate.
+
+In `@main.go` around lines 40 - 46, The struct CompliancePlugin stores mutable
+per-request state (rawConfig, parsedConfig, policyData) and Configure/Eval
+access them concurrently; add a sync.RWMutex (e.g., mu) to CompliancePlugin and
+use mu.Lock()/mu.Unlock() around writes in Configure and mu.RLock()/mu.RUnlock()
+around reads in Eval (or lock exclusively if Eval mutates), and ensure you copy
+maps/structures when storing or returning them to avoid aliasing; update
+references to rawConfig, parsedConfig, and policyData in Configure and Eval to
+use the mutex-protected access.
+```
+
+</details>
+
+<!-- fingerprinting:phantom:poseidon:hawk -->
+
+<!-- This is an auto-generated comment by CodeRabbit -->
+---
+Comment (main.go:87):
+_⚠️ Potential issue_ | _🟡 Minor_ | _⚡ Quick win_
+
+**Guard against nil `Eval` request before dereferencing policy request.**
+
+If `req` is nil, `requestWithDefaultPolicyBehavior` returns nil and Line 83 will panic.
+
+<details>
+<summary>Suggested fix</summary>
+
+```diff
+ func (l *CompliancePlugin) Eval(req *proto.EvalRequest, apiHelper runner.ApiHelper) (*proto.EvalResponse, error) {
+ 	ctx := context.Background()
++	if req == nil {
++		return &proto.EvalResponse{Status: proto.ExecutionStatus_FAILURE}, fmt.Errorf("eval request is nil")
++	}
+@@
+ 	policyRequest := requestWithDefaultPolicyBehavior(req)
+```
+
+</details>
+
+<details>
+<summary>🤖 Prompt for AI Agents</summary>
+
+```
+Verify each finding against current code. Fix only still-valid issues, skip the
+rest with a brief reason, keep changes minimal, and validate.
+
+In `@main.go` around lines 81 - 87, requestWithDefaultPolicyBehavior can return
+nil when req is nil, so before calling PolicyPathsForBehavior on policyRequest
+you must guard against a nil Eval request: check if policyRequest == nil (or
+policyRequest.Eval == nil if relevant) and handle that case (return early with
+an error/empty paths map or construct a safe default) so you avoid dereferencing
+a nil pointer when building pathsByType; update the code that builds pathsByType
+(references: requestWithDefaultPolicyBehavior, policyRequest,
+PolicyPathsForBehavior,
+resourceTypeLoadBalancer/resourceTypeListener/resourceTypeTargetGroup/resourceTypeTargetHealth)
+to use the nil-checked/initialized policyRequest or fallback empty slices.
+```
+
+</details>
+
+<!-- fingerprinting:phantom:poseidon:hawk -->
+
+<!-- This is an auto-generated comment by CodeRabbit -->
+---
+Comment (Makefile:5):
+_⚠️ Potential issue_ | _🟡 Minor_ | _⚡ Quick win_
+
+**Declare `build` and `test` as phony targets.**
+
+Without `.PHONY`, these targets can be skipped when same-named files exist in the repo.
+
+<details>
+<summary>Suggested fix</summary>
+
+```diff
++.PHONY: build test
++
+ build:        ## Build the plugin binary
+ 	go build -o plugin .
+
+ test:         ## Run tests
+ 	go test ./...
+```
+</details>
+
+<!-- suggestion_start -->
+
+<details>
+<summary>📝 Committable suggestion</summary>
+
+> ‼️ **IMPORTANT**
+> Carefully review the code before committing. Ensure that it accurately replaces the highlighted code, contains no missing lines, and has no issues with indentation. Thoroughly test & benchmark the code to ensure it meets the requirements.
+
+```suggestion
+.PHONY: build test
+
+build:        ## Build the plugin binary
+	go build -o plugin .
+
+test:         ## Run tests
+	go test ./...
+```
+
+</details>
+
+<!-- suggestion_end -->
+
+<details>
+<summary>🧰 Tools</summary>
+
+<details>
+<summary>🪛 checkmake (0.3.2)</summary>
+
+[warning] 4-4: Required target "all" is missing from the Makefile.
+
+(minphony)
+
+---
+
+[warning] 4-4: Required target "clean" is missing from the Makefile.
+
+(minphony)
+
+---
+
+[warning] 4-4: Required target "test" must be declared PHONY.
+
+(minphony)
+
+</details>
+
+</details>
+
+<details>
+<summary>🤖 Prompt for AI Agents</summary>
+
+```
+Verify each finding against current code. Fix only still-valid issues, skip the
+rest with a brief reason, keep changes minimal, and validate.
+
+In `@Makefile` around lines 1 - 5, The Makefile's build and test targets should be
+declared phony to avoid being skipped when files named "build" or "test" exist;
+update the Makefile to add a .PHONY declaration that includes the build and test
+targets (reference: targets "build" and "test") so Make always runs these
+recipes.
+```
+
+</details>
+
+<!-- fingerprinting:phantom:poseidon:hawk -->
+
+<!-- This is an auto-generated comment by CodeRabbit -->
+Implementation guidance: In .github/workflows/build-and-upload.yml, update the existing actions/checkout@v4 step to add a with block containing persist-credentials: false. Keep the step otherwise unchanged and preserve indentation. Do not remove the workflow permissions or GITHUB_TOKEN usage used later for package upload.
+Implementation guidance: In .github/workflows/build-and-upload.yml and .github/workflows/test.yml, replace each GitHub Actions uses tag with a full immutable 40-character commit SHA ref: actions/checkout@v4, actions/setup-go@v5, and goreleaser/goreleaser-action@v6. Resolve the SHAs for the current upstream tag targets, then use owner/repo@<sha> format. Preserve each step's existing with/env blocks, including the persist-credentials: false checkout input if added separately. Do not pin go install module versions here; only pin workflow action uses refs.
+Implementation guidance: In collector.go, in Collector.Collect after workerCount := c.Config.MaxConcurrency and before creating jobs/results, guard non-positive workerCount so the unbuffered jobs sender cannot block forever. Prefer setting workerCount to 1 when MaxConcurrency <= 0, then cap it to len(targets) as the code already does. Keep the existing per-target timeout goroutine pattern and result accumulation behavior. Add or update a focused collector test that constructs a Collector with MaxConcurrency 0 or negative and verifies Collect returns instead of hanging.
+Implementation guidance: In collector.go, extend collectELBV2 to call c.collectTags(ctx, client, listenerARN) for every collected listener and c.collectTags(ctx, client, tgARN) for every target group. Store successful maps in result.tags[arn] and append tag errors to result.errors[arn] with Scope "tags". In collectTarget, pass collected.tags[listenerARN] into newListenerRecord and collected.tags[tgARN] into newTargetGroupRecord. In input.go, update newListenerRecord and newTargetGroupRecord signatures to accept tags map[string]string and pass that map to newResourceRecord instead of nil. Do not create separate tag evidence or tag records; tags must remain enrichment on the existing listener and target-group records. Update tests/fakes to expect DescribeTags for load balancers, listeners, and target groups, and assert listener/target-group Input.Tags are populated.
+Implementation guidance: In main.go, add a sync.RWMutex field to CompliancePlugin and use it to protect rawConfig, parsedConfig, and policyData across Configure and Eval. Configure should parse first, then Lock, store cloned copies of req.GetConfig() and policy data, and Unlock. Eval mutates parsedConfig/policyData when they are nil, so use an exclusive Lock while initializing and copying local variables, then Unlock before collection and policy evaluation. Avoid reading l.parsedConfig or l.policyData after unlocking: pass the local parsedConfig to Collector, and change evaluateRecord to accept policyLabels and policyData (or a local config snapshot) so it uses those local values instead of plugin fields. Use shallow map clones for map[string]string and map[string]interface{} to avoid caller aliasing.
+Implementation guidance: In main.go, at the start of CompliancePlugin.Eval after creating ctx and before requestWithDefaultPolicyBehavior/PolicyPathsForBehavior, check if req == nil. Return &proto.EvalResponse{Status: proto.ExecutionStatus_FAILURE} with a clear error such as fmt.Errorf("eval request is nil"). This prevents policyRequest from being nil when building pathsByType. Keep the existing default policy behavior logic unchanged for non-nil requests.
+Implementation guidance: In Makefile, add a .PHONY declaration before the targets: .PHONY: build test. Leave the existing build and test recipes unchanged; do not add unrelated all or clean targets unless separately requested.
