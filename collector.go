@@ -222,6 +222,8 @@ func (c *Collector) Collect(ctx context.Context) CollectionResult {
 		go func() {
 			defer wg.Done()
 			for target := range jobs {
+				// APITimeoutSeconds is a per-target budget for ELBv2 pagination,
+				// CloudTrail lookup, and tag collection for one account/region.
 				targetCtx, cancel := context.WithTimeout(ctx, time.Duration(c.Config.APITimeoutSeconds)*time.Second)
 				results <- c.collectTarget(targetCtx, c.Factory, target, collectedAt, window, windowStart, windowEnd)
 				cancel()
@@ -312,10 +314,6 @@ func (c *Collector) collectELBV2(ctx context.Context, client ELBV2API) targetCol
 		listeners, listenerErrors := c.collectListeners(ctx, client, lbARN)
 		result.listeners[lbARN] = listeners
 		result.errors[lbARN] = append(result.errors[lbARN], listenerErrors...)
-		for _, listener := range listeners {
-			listenerARN := aws.ToString(listener.ListenerArn)
-			result.errors[listenerARN] = append(result.errors[listenerARN], listenerErrors...)
-		}
 	}
 	c.mergeTags(ctx, client, result, lbARNs)
 	c.mergeTags(ctx, client, result, listenerARNs(result.listeners))
@@ -576,6 +574,8 @@ func eventMentions(event CloudTrailEvent, value string) bool {
 	if value == "" {
 		return false
 	}
+	// Listener and rule events often carry ELBv2 identifiers only in request
+	// parameters, so matching intentionally includes the raw CloudTrail payload.
 	if strings.Contains(event.Raw, value) {
 		return true
 	}

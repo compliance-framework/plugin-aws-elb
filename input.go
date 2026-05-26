@@ -232,6 +232,9 @@ func newResourceRecord(account AccountContext, region string, resource ResourceI
 	}
 }
 
+// clonePolicyInputs intentionally copies only the top-level map because policy
+// input values are read-only during evaluation. Deep-copy nested values before
+// mutating them or introducing parallel mutation of policy data.
 func clonePolicyInputs(input map[string]interface{}) map[string]interface{} {
 	out := make(map[string]interface{}, len(input))
 	for k, v := range input {

@@ -10,7 +10,9 @@ import (
 )
 
 const (
-	defaultLookbackDays      = 90
+	defaultLookbackDays = 90
+	// CloudTrail event history supports lookups for the previous 90 days.
+	maxLookbackDays          = 90
 	defaultAPITimeoutSeconds = 60
 	defaultMaxConcurrency    = 4
 	defaultTagBatchSize      = 20
@@ -26,12 +28,13 @@ const (
 )
 
 type PluginConfig struct {
-	Accounts          []AccountConfig
-	DefaultRegions    []string
-	LookbackDays      int
-	PolicyInputs      map[string]interface{}
-	PolicyLabels      map[string]string
-	MaxConcurrency    int
+	Accounts       []AccountConfig
+	DefaultRegions []string
+	LookbackDays   int
+	PolicyInputs   map[string]interface{}
+	PolicyLabels   map[string]string
+	MaxConcurrency int
+	// APITimeoutSeconds is the per-target collection budget, not a per-call timeout.
 	APITimeoutSeconds int
 	TagBatchSize      int
 }
@@ -70,8 +73,8 @@ func parsePluginConfig(raw map[string]string) (*PluginConfig, error) {
 
 	if v := strings.TrimSpace(raw[configKeyLookbackDays]); v != "" {
 		i, err := strconv.Atoi(v)
-		if err != nil || i <= 0 || i > defaultLookbackDays {
-			return nil, fmt.Errorf("lookback_days must be a positive integer no greater than %d", defaultLookbackDays)
+		if err != nil || i <= 0 || i > maxLookbackDays {
+			return nil, fmt.Errorf("lookback_days must be a positive integer no greater than %d", maxLookbackDays)
 		}
 		cfg.LookbackDays = i
 	}

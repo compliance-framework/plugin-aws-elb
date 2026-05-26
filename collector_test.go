@@ -205,6 +205,41 @@ func (fakeELBV2TagFailure) DescribeTags(ctx context.Context, in *elbv2.DescribeT
 	return nil, errors.New("access denied")
 }
 
+type fakeELBV2ListenerFailure struct{}
+
+func (fakeELBV2ListenerFailure) DescribeLoadBalancers(ctx context.Context, in *elbv2.DescribeLoadBalancersInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeLoadBalancersOutput, error) {
+	return &elbv2.DescribeLoadBalancersOutput{
+		LoadBalancers: []elbv2types.LoadBalancer{
+			testLoadBalancer("arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/app-lb/abc", "app-lb"),
+		},
+	}, nil
+}
+
+func (fakeELBV2ListenerFailure) DescribeListeners(ctx context.Context, in *elbv2.DescribeListenersInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeListenersOutput, error) {
+	return &elbv2.DescribeListenersOutput{
+		Listeners: []elbv2types.Listener{
+			{
+				ListenerArn:     aws.String("arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/app-lb/abc/listener1"),
+				LoadBalancerArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/app-lb/abc"),
+				Protocol:        elbv2types.ProtocolEnumHttps,
+				Port:            aws.Int32(443),
+			},
+		},
+	}, errors.New("listeners unavailable")
+}
+
+func (fakeELBV2ListenerFailure) DescribeTargetGroups(ctx context.Context, in *elbv2.DescribeTargetGroupsInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeTargetGroupsOutput, error) {
+	return &elbv2.DescribeTargetGroupsOutput{}, nil
+}
+
+func (fakeELBV2ListenerFailure) DescribeTargetHealth(ctx context.Context, in *elbv2.DescribeTargetHealthInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeTargetHealthOutput, error) {
+	return &elbv2.DescribeTargetHealthOutput{}, nil
+}
+
+func (fakeELBV2ListenerFailure) DescribeTags(ctx context.Context, in *elbv2.DescribeTagsInput, optFns ...func(*elbv2.Options)) (*elbv2.DescribeTagsOutput, error) {
+	return &elbv2.DescribeTagsOutput{}, nil
+}
+
 type fakeCloudTrail struct {
 	calls int
 }
@@ -409,6 +444,52 @@ func TestCollectorAddsTagErrorsForEachARNInFailedBatch(t *testing.T) {
 	}
 	if recordsWithTagErrors != 2 {
 		t.Fatalf("records with tag errors = %d, want 2", recordsWithTagErrors)
+	}
+}
+
+func TestCollectorScopesListenerErrorsToLoadBalancer(t *testing.T) {
+	cfg, err := parsePluginConfig(map[string]string{
+		"accounts":            `[{"account_id":"123456789012","regions":["us-east-1"]}]`,
+		"api_timeout_seconds": "5",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector := &Collector{
+		Logger: hclog.NewNullLogger(),
+		Config: cfg,
+		Factory: fakeFactory{
+			targets: []ResolvedTarget{{Account: AccountContext{AccountID: "123456789012"}, Region: "us-east-1"}},
+			clients: AWSClientSet{ELBV2: fakeELBV2ListenerFailure{}, STS: fakeSTS{}},
+		},
+		Now: func() time.Time { return time.Date(2026, 5, 14, 12, 0, 0, 0, time.UTC) },
+	}
+
+	result := collector.Collect(context.Background())
+	if result.Err == nil {
+		t.Fatal("Collect returned nil error, want listener error")
+	}
+
+	var loadBalancerErrors int
+	var listenerErrors int
+	for _, record := range result.Records {
+		for _, collectionErr := range record.Input.Collection.Errors {
+			if collectionErr.Scope != "describe_listeners" {
+				continue
+			}
+			switch record.Input.Resource.Type {
+			case resourceTypeLoadBalancer:
+				loadBalancerErrors++
+			case resourceTypeListener:
+				listenerErrors++
+			}
+		}
+	}
+	if loadBalancerErrors != 1 {
+		t.Fatalf("load balancer listener errors = %d, want 1", loadBalancerErrors)
+	}
+	if listenerErrors != 0 {
+		t.Fatalf("listener record listener errors = %d, want 0", listenerErrors)
 	}
 }
 

@@ -15,18 +15,11 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 )
 
-const (
-	behaviorLoadBalancer = "loadbalancer"
-	behaviorListener     = "listener"
-	behaviorTargetGroup  = "target-group"
-	behaviorTargetHealth = "target-health"
-)
-
 var defaultPolicyBehaviors = map[string][]string{
-	"plugin-aws-elbv2-loadbalancer-policies":  {behaviorLoadBalancer},
-	"plugin-aws-elbv2-listener-policies":      {behaviorListener},
-	"plugin-aws-elbv2-target-group-policies":  {behaviorTargetGroup},
-	"plugin-aws-elbv2-target-health-policies": {behaviorTargetHealth},
+	"plugin-aws-elbv2-loadbalancer-policies":  {resourceTypeLoadBalancer},
+	"plugin-aws-elbv2-listener-policies":      {resourceTypeListener},
+	"plugin-aws-elbv2-target-group-policies":  {resourceTypeTargetGroup},
+	"plugin-aws-elbv2-target-health-policies": {resourceTypeTargetHealth},
 }
 
 func requestWithDefaultPolicyBehavior(req *proto.EvalRequest) *proto.EvalRequest {
@@ -35,7 +28,7 @@ func requestWithDefaultPolicyBehavior(req *proto.EvalRequest) *proto.EvalRequest
 	}
 	return req.
 		WithDefaultPolicyBehavior(defaultPolicyBehaviors).
-		WithUndefinedMappedTo([]string{behaviorLoadBalancer})
+		WithUndefinedMappedTo([]string{resourceTypeLoadBalancer})
 }
 
 type CompliancePlugin struct {
@@ -75,6 +68,18 @@ func (l *CompliancePlugin) Eval(req *proto.EvalRequest, apiHelper runner.ApiHelp
 		return &proto.EvalResponse{Status: proto.ExecutionStatus_FAILURE}, fmt.Errorf("eval request is nil")
 	}
 
+	l.mu.RLock()
+	configured := l.parsedConfig != nil && l.policyData != nil
+	if configured {
+		parsedConfig := l.parsedConfig
+		policyData := clonePolicyInputs(l.policyData)
+		policyLabels := cloneStringMap(parsedConfig.PolicyLabels)
+		l.mu.RUnlock()
+
+		return l.evalWithConfig(ctx, req, apiHelper, parsedConfig, policyData, policyLabels)
+	}
+	l.mu.RUnlock()
+
 	l.mu.Lock()
 	if l.parsedConfig == nil {
 		parsed, err := parsePluginConfig(l.rawConfig)
@@ -92,12 +97,16 @@ func (l *CompliancePlugin) Eval(req *proto.EvalRequest, apiHelper runner.ApiHelp
 	policyLabels := cloneStringMap(parsedConfig.PolicyLabels)
 	l.mu.Unlock()
 
+	return l.evalWithConfig(ctx, req, apiHelper, parsedConfig, policyData, policyLabels)
+}
+
+func (l *CompliancePlugin) evalWithConfig(ctx context.Context, req *proto.EvalRequest, apiHelper runner.ApiHelper, parsedConfig *PluginConfig, policyData map[string]interface{}, policyLabels map[string]string) (*proto.EvalResponse, error) {
 	policyRequest := requestWithDefaultPolicyBehavior(req)
 	pathsByType := map[string][]string{
-		resourceTypeLoadBalancer: policyRequest.PolicyPathsForBehavior(behaviorLoadBalancer),
-		resourceTypeListener:     policyRequest.PolicyPathsForBehavior(behaviorListener),
-		resourceTypeTargetGroup:  policyRequest.PolicyPathsForBehavior(behaviorTargetGroup),
-		resourceTypeTargetHealth: policyRequest.PolicyPathsForBehavior(behaviorTargetHealth),
+		resourceTypeLoadBalancer: policyRequest.PolicyPathsForBehavior(resourceTypeLoadBalancer),
+		resourceTypeListener:     policyRequest.PolicyPathsForBehavior(resourceTypeListener),
+		resourceTypeTargetGroup:  policyRequest.PolicyPathsForBehavior(resourceTypeTargetGroup),
+		resourceTypeTargetHealth: policyRequest.PolicyPathsForBehavior(resourceTypeTargetHealth),
 	}
 
 	collector := &Collector{Logger: l.logger.Named("collector"), Config: parsedConfig, Factory: l.factory}
