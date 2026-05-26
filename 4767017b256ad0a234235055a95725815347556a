@@ -1,0 +1,7 @@
+lisa-design:
+- Routed policy bundles by `resource.type` using the RunnerV2 `policy_behavior` API, defaulting unmapped bundles to `loadbalancer` to match the agent/plugin contract described in the feature request.
+- Kept ELBv2 records one-to-one with AWS SDK structs: `LoadBalancer`, `Listener`, `TargetGroup`, and `TargetHealthDescription`; tags and CloudTrail events are enrichment on those records rather than standalone evidence.
+- Intentionally limited TLS evidence to listener `ssl_policy` and first `certificate_arn`; ACM certificate metadata and SSL policy cipher expansion are excluded so ownership stays with separate policy/plugin domains.
+- Attached CloudTrail dynamic evidence only to load balancer records and matched events by load balancer ARN/resource ID or known listener ARN, preserving listener and rule events without creating extra rule records.
+- Used per-target worker concurrency with per-target API timeout so multi-account/region collection continues after individual API failures; failures are accumulated into `collection.errors` and returned from `Eval`.
+- Used `target_group_arn` as the `resource.arn` for `target-health` records because AWS `TargetHealthDescription` has no ARN of its own; the record remains cross-linked through `config.target_group_arn`.
