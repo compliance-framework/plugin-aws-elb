@@ -25,7 +25,7 @@ The CCF agent passes configuration as flat string fields. Structured values are 
 | `policy_inputs` | `{}` | JSON object exposed to Rego as `input.policy_inputs`. |
 | `policy_input` | `{}` | Alias for `policy_inputs`. |
 | `policy_labels` | `{}` | JSON string map merged into generated evidence labels. |
-| `max_concurrency` | `4` | Positive integer worker count for account/region collection. |
+| `max_concurrency` | `4` | Positive integer no greater than `32`, used as the worker count for account/region collection. |
 | `api_timeout_seconds` | `60` | Positive integer timeout per account/region target. |
 | `tag_batch_size` | `20` | Positive integer no greater than `20`, used as the ELBv2 `DescribeTags` resource ARN batch size. |
 
@@ -52,7 +52,7 @@ All records share this envelope:
 - `resource`: `{id, arn, type}`
 - `config`: resource-specific fields listed below
 - `dynamic`: dynamic evidence enrichment; empty for non-loadbalancer records
-- `tags`: ELBv2 tags for load balancer records
+- `tags`: ELBv2 tags for load balancer, listener, and target-group records; empty for target-health records
 - `collection`: collection metadata, raw payload hash, errors, and optional lookback window
 - `policy_inputs`: parsed policy input object
 
@@ -117,7 +117,7 @@ All records share this envelope:
     "certificate_arn": "arn:aws:acm:us-east-1:123456789012:certificate/cert1"
   },
   "dynamic": {},
-  "tags": {},
+  "tags": {"tls": "public"},
   "collection": {
     "collected_at": "2026-05-14T12:00:00Z",
     "collector_version": "aws-elbv2",
@@ -153,7 +153,7 @@ All records share this envelope:
     "unhealthy_threshold_count": 2
   },
   "dynamic": {},
-  "tags": {},
+  "tags": {"service": "orders"},
   "collection": {
     "collected_at": "2026-05-14T12:00:00Z",
     "collector_version": "aws-elbv2",

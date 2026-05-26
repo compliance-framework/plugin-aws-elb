@@ -15,16 +15,18 @@ const (
 	maxLookbackDays          = 90
 	defaultAPITimeoutSeconds = 60
 	defaultMaxConcurrency    = 4
-	defaultTagBatchSize      = 20
-	configKeyAccounts        = "accounts"
-	configKeyDefaultRegions  = "default_regions"
-	configKeyLookbackDays    = "lookback_days"
-	configKeyPolicyInputs    = "policy_inputs"
-	configKeyPolicyInput     = "policy_input"
-	configKeyPolicyLabels    = "policy_labels"
-	configKeyMaxConcurrency  = "max_concurrency"
-	configKeyAPITimeout      = "api_timeout_seconds"
-	configKeyTagBatchSize    = "tag_batch_size"
+	// Limit account/region fan-out to avoid excessive AWS API concurrency.
+	maxMaxConcurrency       = 32
+	defaultTagBatchSize     = 20
+	configKeyAccounts       = "accounts"
+	configKeyDefaultRegions = "default_regions"
+	configKeyLookbackDays   = "lookback_days"
+	configKeyPolicyInputs   = "policy_inputs"
+	configKeyPolicyInput    = "policy_input"
+	configKeyPolicyLabels   = "policy_labels"
+	configKeyMaxConcurrency = "max_concurrency"
+	configKeyAPITimeout     = "api_timeout_seconds"
+	configKeyTagBatchSize   = "tag_batch_size"
 )
 
 type PluginConfig struct {
@@ -99,8 +101,8 @@ func parsePluginConfig(raw map[string]string) (*PluginConfig, error) {
 
 	if v := strings.TrimSpace(raw[configKeyMaxConcurrency]); v != "" {
 		i, err := strconv.Atoi(v)
-		if err != nil || i <= 0 {
-			return nil, errors.New("max_concurrency must be a positive integer")
+		if err != nil || i <= 0 || i > maxMaxConcurrency {
+			return nil, fmt.Errorf("max_concurrency must be a positive integer no greater than %d", maxMaxConcurrency)
 		}
 		cfg.MaxConcurrency = i
 	}

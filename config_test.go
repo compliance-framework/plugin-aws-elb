@@ -71,6 +71,7 @@ func TestParsePluginConfigValidation(t *testing.T) {
 		{"lookback_days": "91"},
 		{"lookback_days": "abc"},
 		{"max_concurrency": "0"},
+		{"max_concurrency": "33"},
 		{"api_timeout_seconds": "-1"},
 		{"tag_batch_size": "0"},
 		{"tag_batch_size": "21"},
