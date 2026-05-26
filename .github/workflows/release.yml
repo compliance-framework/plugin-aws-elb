@@ -1,13 +1,14 @@
-name: New Release
+name: release
 
 on:
   push:
     tags:
-      - '*'
+      - "*"
+
+permissions:
+  packages: write
+  contents: write
 
 jobs:
-  release:
-    permissions:
-      packages: write
-      contents: write
+  build-and-upload:
     uses: ./.github/workflows/build-and-upload.yml

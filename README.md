@@ -1,174 +1,222 @@
-# AWS RDS/Aurora PostgreSQL Plugin
+# AWS ELBv2 CCF Plugin
 
-This plugin collects read-only evidence for Amazon RDS instances, Amazon Aurora
-clusters, and RDS snapshots, then evaluates configured CCF/Rego policy bundles
-against a normalized per-resource input document.
+This plugin collects read-only AWS Elastic Load Balancing v2 evidence and evaluates CCF Rego policy bundles against one normalized input document per ELBv2 resource.
 
-It implements the RunnerV2 plugin interface. During `Init`, it registers subject
-templates for:
+It implements the RunnerV2 gRPC plugin protocol from `github.com/compliance-framework/agent`.
 
-- `aws-rds-instance`
-- `aws-rds-cluster`
-- `aws-rds-snapshot`
+Subject templates registered during `Init`:
 
-Account and region are recorded as labels and input context. They are not
-registered as standalone subjects.
+- `aws-elbv2-loadbalancer`
+- `aws-elbv2-listener`
+- `aws-elbv2-target-group`
+- `aws-elbv2-target-health`
+
+Account and region are labels and input context. They are not standalone subjects.
 
 ## Configuration
 
-The CCF agent passes plugin config as flat string fields. Structured fields are
-JSON-encoded strings.
+The CCF agent passes configuration as flat string fields. Structured values are JSON-encoded strings.
 
-| Key | Required | Description |
+| Key | Default | Description |
 | --- | --- | --- |
-| `accounts` | No | JSON array of account targets. Empty means use the account from the configured AWS credential chain. |
-| `default_regions` | No | JSON array of regions used when an account omits `regions`. Empty means use the AWS SDK default region. |
-| `lookback_days` | No | Dynamic evidence trailing window in days. Default: `90`. Maximum: `90` (due to CloudTrail LookupEvents limits). |
-| `policy_inputs` | No | JSON object exposed to Rego as `input.policy_inputs`. |
-| `policy_labels` | No | JSON string map merged into evidence labels. |
-| `max_concurrency` | No | Maximum concurrent account/region collection workers. Default: `4`. |
-| `api_timeout_seconds` | No | Per-account/region collection timeout. Default: `60`. |
-
-Each `accounts` entry supports:
-
-| Field | Required | Description |
-| --- | --- | --- |
-| `account_id` | No | AWS account ID for labeling. If omitted, the plugin resolves it with STS. |
-| `regions` | No | JSON array field inside the account object. Overrides `default_regions`. |
-| `role_arn` | No | IAM role to assume before collection for this account. |
-| `external_id` | No | External ID used with `role_arn`. |
-| `session_name` | No | STS assume-role session name. |
-| `tags` | No | String map copied into account labels and input context. |
+| `accounts` | `[]` | JSON array of `{account_id, regions[], role_arn, external_id, session_name, tags{}}`. Empty means use the configured AWS credential chain. |
+| `default_regions` | `[]` | JSON array used when an account omits `regions`; falls back to the AWS SDK default region. |
+| `lookback_days` | `90` | Positive integer no greater than `90`, used for CloudTrail LookupEvents. |
+| `policy_inputs` | `{}` | JSON object exposed to Rego as `input.policy_inputs`. |
+| `policy_input` | `{}` | Alias for `policy_inputs`. |
+| `policy_labels` | `{}` | JSON string map merged into generated evidence labels. |
+| `max_concurrency` | `4` | Positive integer worker count for account/region collection. |
+| `api_timeout_seconds` | `60` | Positive integer timeout per account/region target. |
 
 Example:
 
 ```json
 {
-  "accounts": "[{\"account_id\":\"123456789012\",\"regions\":[\"us-east-1\",\"us-west-2\"],\"role_arn\":\"arn:aws:iam::123456789012:role/rds-readonly\",\"external_id\":\"ccf\",\"session_name\":\"ccf-rds\",\"tags\":{\"environment\":\"prod\"}}]",
+  "accounts": "[{\"account_id\":\"123456789012\",\"regions\":[\"us-east-1\"],\"role_arn\":\"arn:aws:iam::123456789012:role/elbv2-readonly\",\"external_id\":\"ccf\",\"session_name\":\"ccf-elbv2\",\"tags\":{\"environment\":\"prod\"}}]",
   "default_regions": "[\"us-east-1\"]",
   "lookback_days": "90",
-  "policy_inputs": "{\"minimum_backup_retention_days\":7,\"approved_snapshot_accounts\":[\"111111111111\"]}",
+  "policy_inputs": "{\"minimum_availability_zones\":2}",
   "policy_labels": "{\"team\":\"security\"}"
 }
 ```
 
-## AWS Authentication
-
-The plugin uses AWS SDK v2 native authentication. It supports the default
-credential chain, including environment variables, shared config profiles, SSO,
-web identity, ECS credentials, and instance metadata. When `role_arn` is
-configured for an account, the plugin uses STS AssumeRole on top of the default
-credential chain.
-
-All collection calls are read-only. Fetch failures are accumulated and returned
-from `Eval`, but collection continues for other account/region/resource checks
-where possible.
-
 ## Rego Input Schema
 
-Each RDS instance, cluster, and snapshot is evaluated independently. Policies
-receive one input document per resource:
+All records share this envelope:
+
+- `schema_version`: `v1`
+- `source`: `aws-elbv2`
+- `account`: `{account_id, role_arn, tags}`
+- `region`: `{name}`
+- `resource`: `{id, arn, type}`
+- `config`: resource-specific fields listed below
+- `dynamic`: dynamic evidence enrichment; empty for non-loadbalancer records
+- `tags`: ELBv2 tags for load balancer records
+- `collection`: collection metadata, raw payload hash, errors, and optional lookback window
+- `policy_inputs`: parsed policy input object
+
+### `loadbalancer`
 
 ```json
 {
   "schema_version": "v1",
-  "source": "aws-rds-aurora-psql",
-  "account": {
-    "account_id": "123456789012",
-    "role_arn": "arn:aws:iam::123456789012:role/rds-readonly",
-    "tags": {
-      "environment": "prod"
-    }
-  },
-  "region": {
-    "name": "us-east-1"
-  },
+  "source": "aws-elbv2",
+  "account": {"account_id": "123456789012", "role_arn": "", "tags": {"environment": "prod"}},
+  "region": {"name": "us-east-1"},
   "resource": {
-    "id": "database-1",
-    "arn": "arn:aws:rds:us-east-1:123456789012:db:database-1",
-    "type": "db-instance",
-    "engine": "postgres",
-    "engine_version": "15.4"
+    "id": "app/my-alb/abc123",
+    "arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-alb/abc123",
+    "type": "loadbalancer"
   },
   "config": {
-    "storage_encrypted": true,
-    "kms_key_id": "arn:aws:kms:us-east-1:123456789012:key/example",
-    "multi_az": true,
-    "backup_retention_period": 7,
-    "preferred_backup_window": "03:00-04:00",
-    "latest_restorable_time": "2026-05-14T11:30:00Z",
-    "deletion_protection": true,
-    "publicly_accessible": false,
-    "iam_database_authentication_enabled": true,
-    "ca_certificate_identifier": "rds-ca-rsa2048-g1",
-    "enabled_cloudwatch_logs_exports": ["postgresql"],
-    "ssl_enforcement": {
-      "default.postgres15": "1"
-    }
+    "load_balancer_arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-alb/abc123",
+    "dns_name": "my-alb-123.us-east-1.elb.amazonaws.com",
+    "scheme": "internet-facing",
+    "type": "application",
+    "state": "active",
+    "availability_zones": ["us-east-1a", "us-east-1b"]
   },
   "dynamic": {
-    "cloudtrail_events": [],
-    "account_cloudtrail_events": [],
-    "rds_events": [],
-    "cloudwatch_metrics": {}
+    "cloudtrail_events": [
+      {"event_name": "ModifyListener", "event_time": "2026-04-01T10:00:00Z", "user_identity_arn": "arn:aws:iam::123456789012:role/admin"}
+    ]
   },
-  "snapshots": [
-    {
-      "snapshot_identifier": "database-1-automated",
-      "snapshot_type": "automated",
-      "status": "available",
-      "encrypted": true,
-      "kms_key_id": "arn:aws:kms:us-east-1:123456789012:key/example",
-      "shared_accounts": [],
-      "public": false
-    }
-  ],
-  "tags": {
-    "owner": "data-platform"
-  },
+  "tags": {"owner": "platform-team"},
   "collection": {
     "collected_at": "2026-05-14T12:00:00Z",
-    "collector_version": "aws-rds-aurora-psql",
+    "collector_version": "aws-elbv2",
     "collection_type": "config_dynamic",
-    "lookback_window": {
-      "start": "2026-02-13T12:00:00Z",
-      "end": "2026-05-14T12:00:00Z"
-    },
-    "raw_payload_hashes": {
-      "primary": "sha256..."
-    },
+    "lookback_window": {"start": "2026-02-13T12:00:00Z", "end": "2026-05-14T12:00:00Z"},
+    "raw_payload_hashes": {"primary": "sha256:..."},
     "errors": []
   },
-  "policy_inputs": {
-    "minimum_backup_retention_days": 7,
-    "approved_snapshot_accounts": ["111111111111"]
-  }
+  "policy_inputs": {"minimum_availability_zones": 2}
 }
 ```
 
-`collection.raw_payload_hashes` is for traceability only. It is not used in
-identity labels or evidence-seeding labels.
+### `listener`
 
-## Collection Coverage
+```json
+{
+  "schema_version": "v1",
+  "source": "aws-elbv2",
+  "account": {"account_id": "123456789012", "role_arn": "", "tags": {"environment": "prod"}},
+  "region": {"name": "us-east-1"},
+  "resource": {
+    "id": "listener/app/my-alb/abc123/def456",
+    "arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/my-alb/abc123/def456",
+    "type": "listener"
+  },
+  "config": {
+    "listener_arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/my-alb/abc123/def456",
+    "load_balancer_arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-alb/abc123",
+    "protocol": "HTTPS",
+    "port": 443,
+    "ssl_policy": "ELBSecurityPolicy-TLS13-1-2-2021-06",
+    "certificate_arn": "arn:aws:acm:us-east-1:123456789012:certificate/cert1"
+  },
+  "dynamic": {},
+  "tags": {},
+  "collection": {
+    "collected_at": "2026-05-14T12:00:00Z",
+    "collector_version": "aws-elbv2",
+    "collection_type": "config",
+    "raw_payload_hashes": {"primary": "sha256:..."},
+    "errors": []
+  },
+  "policy_inputs": {"minimum_availability_zones": 2}
+}
+```
+
+### `target-group`
+
+```json
+{
+  "schema_version": "v1",
+  "source": "aws-elbv2",
+  "account": {"account_id": "123456789012", "role_arn": "", "tags": {"environment": "prod"}},
+  "region": {"name": "us-east-1"},
+  "resource": {
+    "id": "app-tg/ghi789",
+    "arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/app-tg/ghi789",
+    "type": "target-group"
+  },
+  "config": {
+    "target_group_arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/app-tg/ghi789",
+    "load_balancer_arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-alb/abc123",
+    "protocol": "HTTP",
+    "port": 80,
+    "health_check_protocol": "HTTP",
+    "health_check_path": "/healthz",
+    "healthy_threshold_count": 3,
+    "unhealthy_threshold_count": 2
+  },
+  "dynamic": {},
+  "tags": {},
+  "collection": {
+    "collected_at": "2026-05-14T12:00:00Z",
+    "collector_version": "aws-elbv2",
+    "collection_type": "config",
+    "raw_payload_hashes": {"primary": "sha256:..."},
+    "errors": []
+  },
+  "policy_inputs": {"minimum_availability_zones": 2}
+}
+```
+
+### `target-health`
+
+```json
+{
+  "schema_version": "v1",
+  "source": "aws-elbv2",
+  "account": {"account_id": "123456789012", "role_arn": "", "tags": {"environment": "prod"}},
+  "region": {"name": "us-east-1"},
+  "resource": {
+    "id": "app-tg/ghi789/i-1234567890abcdef0",
+    "arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/app-tg/ghi789",
+    "type": "target-health"
+  },
+  "config": {
+    "target_group_arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/app-tg/ghi789",
+    "target_id": "i-1234567890abcdef0",
+    "target_health_state": "healthy"
+  },
+  "dynamic": {},
+  "tags": {},
+  "collection": {
+    "collected_at": "2026-05-14T12:00:00Z",
+    "collector_version": "aws-elbv2",
+    "collection_type": "config",
+    "raw_payload_hashes": {"primary": "sha256:..."},
+    "errors": []
+  },
+  "policy_inputs": {"minimum_availability_zones": 2}
+}
+```
+
+## Coverage
 
 CONFIG evidence includes:
 
-- RDS instances via `DescribeDBInstances`
-- Aurora/RDS clusters via `DescribeDBClusters`
-- Snapshots via `DescribeDBSnapshots`, `DescribeDBClusterSnapshots`, and snapshot attribute APIs
-- Tags via `ListTagsForResource`
-- TLS enforcement via DB and cluster parameter groups
-- RDS-boundary KMS posture: encryption enabled and KMS/CMK ID presence
+- `DescribeLoadBalancers`
+- `DescribeListeners`
+- `DescribeTargetGroups`
+- `DescribeTargetHealth`
+- `DescribeTags` for load balancer tags
 
-DYNAMIC evidence uses the configured trailing window:
+DYNAMIC evidence includes CloudTrail `LookupEvents` for `elasticloadbalancing.amazonaws.com`, filtered to `CreateListener`, `ModifyListener`, `DeleteListener`, `CreateRule`, `ModifyRule`, and `DeleteRule`, and attached to matching load balancer records as `dynamic.cloudtrail_events`.
 
-- CloudTrail `LookupEvents` for RDS management and access-removal events (note: IAM events are not collected since IAM is a global service and its CloudTrail events are recorded in us-east-1; the current implementation uses regional CloudTrail clients)
-- RDS `DescribeEvents` for backup, restoration, and deletion categories (note: AWS RDS retains event history for approximately 14 days, so RDS event coverage may be shorter than the configured `lookback_days`)
-- CloudWatch `GetMetricData` for `CPUUtilization`, `DatabaseConnections`, and `FreeStorageSpace`
+Out of scope:
 
-`dynamic.cloudtrail_events` contains only events matched to the current resource.
-Account-scoped events that do not identify any RDS resource are exposed under
-`dynamic.account_cloudtrail_events` (events identifying a different RDS resource are dropped).
+- ACM certificate expiry and renewal status. This plugin does not call `acm.DescribeCertificate`; it only records the listener `certificate_arn`.
+- SSL policy cipher inspection. This plugin records only the listener `ssl_policy` string.
+- AWS Artifact SOC reports and privacy endpoint inventory.
 
-VPC/subnet/security-group deep posture and KMS key internals are intentionally
-out of scope for this plugin.
+## Development
+
+```sh
+make build
+make test
+goreleaser build --snapshot --clean
+```
