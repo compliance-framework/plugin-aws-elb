@@ -204,7 +204,7 @@ CONFIG evidence includes:
 - `DescribeListeners`
 - `DescribeTargetGroups`
 - `DescribeTargetHealth`
-- `DescribeTags` for load balancer tags
+- `DescribeTags` for load balancer, listener, and target group tags
 
 DYNAMIC evidence includes CloudTrail `LookupEvents` for `elasticloadbalancing.amazonaws.com`, filtered to `CreateListener`, `ModifyListener`, `DeleteListener`, `CreateRule`, `ModifyRule`, and `DeleteRule`, and attached to matching load balancer records as `dynamic.cloudtrail_events`.
 

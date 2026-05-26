@@ -20,6 +20,7 @@ jobs:
           cache: false
       - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a
         with:
+          version: '~> v2'
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -30,8 +31,14 @@ jobs:
         run: |
           raw="${GITHUB_REF_NAME}"
           clean="$(printf '%s' "$raw" | tr -c '[:alnum:]._-' '-')"
+          if [[ -z "$clean" ]]; then
+            clean="v"
+          elif [[ "$clean" == .* || "$clean" == -* ]]; then
+            clean="v${clean}"
+          fi
+          clean="${clean:0:128}"
           echo "value=$clean" >> "$GITHUB_OUTPUT"
-          if [[ "$raw" == *-* ]]; then
+          if [[ "$raw" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+(\+[0-9A-Za-z.-]+)?$ ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
             echo "prerelease=false" >> "$GITHUB_OUTPUT"

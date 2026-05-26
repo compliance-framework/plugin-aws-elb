@@ -308,7 +308,6 @@ func (c *Collector) collectELBV2(ctx context.Context, client ELBV2API) targetCol
 	lbARNs := make([]string, 0, len(loadBalancers))
 	for _, lb := range loadBalancers {
 		lbARN := aws.ToString(lb.LoadBalancerArn)
-		result.errors[lbARN] = append(result.errors[lbARN], lbErrors...)
 		lbARNs = append(lbARNs, lbARN)
 		listeners, listenerErrors := c.collectListeners(ctx, client, lbARN)
 		result.listeners[lbARN] = listeners
@@ -327,7 +326,6 @@ func (c *Collector) collectELBV2(ctx context.Context, client ELBV2API) targetCol
 	tgARNs := make([]string, 0, len(targetGroups))
 	for _, targetGroup := range targetGroups {
 		tgARN := aws.ToString(targetGroup.TargetGroupArn)
-		result.errors[tgARN] = append(result.errors[tgARN], tgErrors...)
 		tgARNs = append(tgARNs, tgARN)
 		health, healthErrors := c.collectTargetHealth(ctx, client, tgARN)
 		result.targetHealth[tgARN] = health
@@ -542,27 +540,32 @@ func cloudTrailResourceNames(resources []cloudtrailtypes.Resource) []string {
 
 func matchEventsToLoadBalancers(events []CloudTrailEvent, lbs []elbv2types.LoadBalancer, listeners map[string][]elbv2types.Listener) map[string][]CloudTrailEvent {
 	result := map[string][]CloudTrailEvent{}
-	listenerToLB := map[string]string{}
-	lbIDs := map[string]string{}
+	identifierToLB := map[string]string{}
 	for _, lb := range lbs {
 		lbARN := aws.ToString(lb.LoadBalancerArn)
-		lbIDs[lbARN] = loadBalancerID(lbARN)
+		if lbARN == "" {
+			continue
+		}
+		identifierToLB[lbARN] = lbARN
+		if lbID := loadBalancerID(lbARN); lbID != "" {
+			identifierToLB[lbID] = lbARN
+		}
 		for _, listener := range listeners[lbARN] {
-			listenerToLB[aws.ToString(listener.ListenerArn)] = lbARN
+			if listenerARN := aws.ToString(listener.ListenerArn); listenerARN != "" {
+				identifierToLB[listenerARN] = lbARN
+			}
 		}
 	}
 
 	for _, event := range events {
-		for lbARN, lbID := range lbIDs {
-			if eventMentions(event, lbARN) || (lbID != "" && eventMentions(event, lbID)) {
-				result[lbARN] = append(result[lbARN], event)
+		matched := map[string]bool{}
+		for identifier, lbARN := range identifierToLB {
+			if matched[lbARN] {
 				continue
 			}
-			for listenerARN, listenerLBARN := range listenerToLB {
-				if listenerLBARN == lbARN && eventMentions(event, listenerARN) {
-					result[lbARN] = append(result[lbARN], event)
-					break
-				}
+			if eventMentions(event, identifier) {
+				result[lbARN] = append(result[lbARN], event)
+				matched[lbARN] = true
 			}
 		}
 	}
