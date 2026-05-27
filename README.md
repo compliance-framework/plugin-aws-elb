@@ -4,7 +4,7 @@ This plugin collects read-only AWS Elastic Load Balancing v2 evidence and evalua
 
 It implements the RunnerV2 gRPC plugin protocol from `github.com/compliance-framework/agent`.
 
-Subject templates registered during `Init`:
+Component subject templates registered during `Init`:
 
 - `aws-elbv2-loadbalancer`
 - `aws-elbv2-listener`

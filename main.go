@@ -182,7 +182,7 @@ func buildSubjectTemplates() []*proto.SubjectTemplate {
 func subjectTemplate(name string, title string, description string, purpose string, resourceDescription string) *proto.SubjectTemplate {
 	return &proto.SubjectTemplate{
 		Name:                name,
-		Type:                proto.SubjectType_SUBJECT_TYPE_INVENTORY_ITEM,
+		Type:                proto.SubjectType_SUBJECT_TYPE_COMPONENT,
 		TitleTemplate:       title,
 		DescriptionTemplate: description,
 		PurposeTemplate:     purpose,

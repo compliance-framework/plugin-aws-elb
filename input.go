@@ -226,7 +226,7 @@ func newResourceRecord(account AccountContext, region string, resource ResourceI
 		Input:       input,
 		Labels:      labels,
 		SubjectID:   subjectID,
-		SubjectType: proto.SubjectType_SUBJECT_TYPE_INVENTORY_ITEM,
+		SubjectType: proto.SubjectType_SUBJECT_TYPE_COMPONENT,
 		Title:       title,
 		Raw:         raw,
 	}
