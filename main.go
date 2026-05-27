@@ -16,10 +16,10 @@ import (
 )
 
 var defaultPolicyBehaviors = map[string][]string{
-	"plugin-aws-elbv2-loadbalancer-policies":  {resourceTypeLoadBalancer},
-	"plugin-aws-elbv2-listener-policies":      {resourceTypeListener},
-	"plugin-aws-elbv2-target-group-policies":  {resourceTypeTargetGroup},
-	"plugin-aws-elbv2-target-health-policies": {resourceTypeTargetHealth},
+	"plugin-aws-elb-loadbalancer-policies":  {resourceTypeLoadBalancer},
+	"plugin-aws-elb-listener-policies":      {resourceTypeListener},
+	"plugin-aws-elb-target-group-policies":  {resourceTypeTargetGroup},
+	"plugin-aws-elb-target-health-policies": {resourceTypeTargetHealth},
 }
 
 func requestWithDefaultPolicyBehavior(req *proto.EvalRequest) *proto.EvalRequest {
