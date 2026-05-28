@@ -350,6 +350,16 @@ func TestCollectorCollectsAllRecordTypesAndAccumulatesErrors(t *testing.T) {
 	if th.Input.Config["target_id"] != "i-1234567890abcdef0" || th.Input.Config["target_health_state"] != "healthy" {
 		t.Fatalf("target health config = %#v", th.Input.Config)
 	}
+	if th.Labels["target_id"] != "i-1234567890abcdef0" {
+		t.Fatalf("target health labels missing target_id: %#v", th.Labels)
+	}
+	for _, typ := range []string{resourceTypeLoadBalancer, resourceTypeListener, resourceTypeTargetGroup} {
+		for _, record := range byType[typ] {
+			if _, ok := record.Labels["target_id"]; ok {
+				t.Fatalf("%s labels should not contain target_id: %#v", typ, record.Labels)
+			}
+		}
+	}
 
 	var sawHealthError bool
 	for _, record := range result.Records {

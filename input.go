@@ -169,6 +169,10 @@ func newTargetHealthRecord(account AccountContext, region string, targetGroupARN
 		"target_health_state": state,
 	}
 	record := newResourceRecord(account, region, ResourceIdentity{ID: id, ARN: targetGroupARN, Type: resourceTypeTargetHealth}, config, nil, nil, errors, policyInputs, collectedAt, nil, targetHealth, "aws-elbv2-target-health", fmt.Sprintf("aws-elbv2-target-health/%s/%s/%s", account.AccountID, region, id), "AWS ELBv2 Target Health ["+id+"]")
+	// target_id is exposed as a label so downstream evidence-search consumers can
+	// disambiguate targets sharing a target-group ARN; the resource_arn/resource_id
+	// labels alone are not sufficient for exact-match filtering.
+	record.Labels["target_id"] = targetID
 	return &record
 }
 
