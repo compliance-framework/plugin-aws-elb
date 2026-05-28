@@ -18,8 +18,8 @@ import (
 var defaultPolicyBehaviors = map[string][]string{
 	"plugin-aws-elb-loadbalancer-policies":  {resourceTypeLoadBalancer},
 	"plugin-aws-elb-listener-policies":      {resourceTypeListener},
-	"plugin-aws-elb-target-group-policies":  {resourceTypeTargetGroup},
-	"plugin-aws-elb-target-health-policies": {resourceTypeTargetHealth},
+	"plugin-aws-elb-targetgroup-policies":  {resourceTypeTargetGroup},
+	"plugin-aws-elb-targethealth-policies": {resourceTypeTargetHealth},
 }
 
 func requestWithDefaultPolicyBehavior(req *proto.EvalRequest) *proto.EvalRequest {
