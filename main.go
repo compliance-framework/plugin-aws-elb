@@ -16,8 +16,8 @@ import (
 )
 
 var defaultPolicyBehaviors = map[string][]string{
-	"plugin-aws-elb-loadbalancer-policies":  {resourceTypeLoadBalancer},
-	"plugin-aws-elb-listener-policies":      {resourceTypeListener},
+	"plugin-aws-elb-loadbalancer-policies": {resourceTypeLoadBalancer},
+	"plugin-aws-elb-listener-policies":     {resourceTypeListener},
 	"plugin-aws-elb-targetgroup-policies":  {resourceTypeTargetGroup},
 	"plugin-aws-elb-targethealth-policies": {resourceTypeTargetHealth},
 }
