@@ -1,0 +1,2 @@
+lisa-design:
+Manifest seeded at 0.1.0: releases/latest is v0.1.0 (final vX.Y.Z), its commit 50167a6 is an ancestor of main; no bootstrap-sha. Callers copied verbatim from the merged pilot (plugin-file-attestation#9), pinned to workflows v1.5.2. .goreleaser.yaml: only the release block was added; hooks, builds and archive template kept as-is. README only documents a snapshot dev build, not releasing, so it is unchanged.
