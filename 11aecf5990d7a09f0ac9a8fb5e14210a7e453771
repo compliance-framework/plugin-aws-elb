@@ -1,0 +1,4 @@
+lisa-design:
+- The plugin already stores req.GetPolicyData() in Configure and passes it to NewPolicyProcessor (since the v0.7.0 bump), so no code change was needed for the policyData parameter; title stays fix(deps).
+- go directive was already 1.26.1, so go get did not change it.
+- gofmt fix to main.go (pre-existing misalignment from #3) is a separate style: commit so layer 2's shared CI gofmt check passes and layer 1's local gofmt check is empty.
