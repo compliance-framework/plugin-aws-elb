@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.47.3
 	github.com/aws/aws-sdk-go-v2/config v1.33.9
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.9
-	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.65.4
+	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.65.5
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.63.4
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.4
 	github.com/compliance-framework/agent v0.9.3
