@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/compliance-framework/plugin-aws-elb/compare/v0.1.2...v0.1.3) (2026-10-30)
+
+
+### Bug Fixes
+
+* **deps:** build with the go1.26.10 toolchain so Renovate can ship Go security fixes ([#29](https://github.com/compliance-framework/plugin-aws-elb/issues/29)) ([76aec5a](https://github.com/compliance-framework/plugin-aws-elb/commit/76aec5a3cb0d51a87e24b0fc867da521b0e9e2fb))
+* **deps:** update aws-sdk-go-v2 monorepo ([#33](https://github.com/compliance-framework/plugin-aws-elb/issues/33)) ([518cde3](https://github.com/compliance-framework/plugin-aws-elb/commit/518cde372ba26da5623dd0cc28b141f5e5e0cec7))
+
 ## [0.1.2](https://github.com/compliance-framework/plugin-aws-elb/compare/v0.1.1...v0.1.2) (2026-10-28)
 
 
