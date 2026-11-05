@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.4](https://github.com/compliance-framework/plugin-aws-elb/compare/v0.1.3...v0.1.4) (2026-11-05)
+
+
+### Bug Fixes
+
+* **deps:** update aws-sdk-go-v2 monorepo ([#35](https://github.com/compliance-framework/plugin-aws-elb/issues/35)) ([b6d938a](https://github.com/compliance-framework/plugin-aws-elb/commit/b6d938a0cd3b3b98c0f8d7bc06f0876b766544c3))
+* **deps:** update aws-sdk-go-v2 monorepo ([#37](https://github.com/compliance-framework/plugin-aws-elb/issues/37)) ([0612fb3](https://github.com/compliance-framework/plugin-aws-elb/commit/0612fb38e009d0b7a4bbb3f55c1161dae2462cad))
+
 ## [0.1.3](https://github.com/compliance-framework/plugin-aws-elb/compare/v0.1.2...v0.1.3) (2026-11-02)
 
 
