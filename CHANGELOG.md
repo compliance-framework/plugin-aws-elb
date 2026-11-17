@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.4](https://github.com/compliance-framework/plugin-aws-elb/compare/v0.1.3...v0.1.4) (2026-11-17)
+
+
+### Bug Fixes
+
+* **deps:** update aws-sdk-go-v2 monorepo ([#35](https://github.com/compliance-framework/plugin-aws-elb/issues/35)) ([b6d938a](https://github.com/compliance-framework/plugin-aws-elb/commit/b6d938a0cd3b3b98c0f8d7bc06f0876b766544c3))
+* **deps:** update aws-sdk-go-v2 monorepo ([#37](https://github.com/compliance-framework/plugin-aws-elb/issues/37)) ([0612fb3](https://github.com/compliance-framework/plugin-aws-elb/commit/0612fb38e009d0b7a4bbb3f55c1161dae2462cad))
+* **deps:** update aws-sdk-go-v2 monorepo ([#38](https://github.com/compliance-framework/plugin-aws-elb/issues/38)) ([8f011fd](https://github.com/compliance-framework/plugin-aws-elb/commit/8f011fd392b8ec0472eb15122685b71a67446134))
+* **deps:** update aws-sdk-go-v2 monorepo ([#40](https://github.com/compliance-framework/plugin-aws-elb/issues/40)) ([b8d9f5f](https://github.com/compliance-framework/plugin-aws-elb/commit/b8d9f5fb9170d6baf8772466b1971f40c508e3f9))
+* **deps:** update aws-sdk-go-v2 monorepo ([#41](https://github.com/compliance-framework/plugin-aws-elb/issues/41)) ([a0a35ee](https://github.com/compliance-framework/plugin-aws-elb/commit/a0a35ee613886a68a9b6f9e89a9ef87074a5eb4a))
+* **deps:** update aws-sdk-go-v2 monorepo ([#42](https://github.com/compliance-framework/plugin-aws-elb/issues/42)) ([9a9da42](https://github.com/compliance-framework/plugin-aws-elb/commit/9a9da42dc7cec6ed6a7a956ddb9ca8de543817b9))
+* **deps:** update aws-sdk-go-v2 monorepo ([#43](https://github.com/compliance-framework/plugin-aws-elb/issues/43)) ([bd26fb3](https://github.com/compliance-framework/plugin-aws-elb/commit/bd26fb358e6cc577b7d0c824dc3cf7396134db8c))
+* **deps:** update security fixes (gomod) [security] ([#39](https://github.com/compliance-framework/plugin-aws-elb/issues/39)) ([ead3c2d](https://github.com/compliance-framework/plugin-aws-elb/commit/ead3c2ded7d86017648988be003ea19fb04f23c9))
+
 ## [0.1.3](https://github.com/compliance-framework/plugin-aws-elb/compare/v0.1.2...v0.1.3) (2026-11-02)
 
 
